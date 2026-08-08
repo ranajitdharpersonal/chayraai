@@ -216,8 +216,7 @@ export default function HelpBar() {
   };
 
   return (
-    <> 
-    <div className="w-full flex flex-col relative z-10 bg-[#0a0a0b]/80 backdrop-blur-3xl border border-white/5 rounded-2xl p-2 gap-2 transition-all shadow-2xl">
+    <div className="w-full flex flex-col relative z-10 bg-[#0a0714]/80 backdrop-blur-3xl border border-violet-500/10 rounded-[22px] p-2 gap-2 transition-all shadow-2xl">
       <div className="absolute inset-0 bg-gradient-to-t from-red-500/5 to-transparent rounded-3xl pointer-events-none"></div>
 
       {/* LOCATION BAR */}
@@ -385,50 +384,50 @@ export default function HelpBar() {
           </button>
         </div>
       </div>
+
+      {/* STATUS FOOTER — now in normal flow inside the same box, no longer fixed to the viewport */}
+      <div className="hidden md:grid grid-cols-3 w-full items-center text-[10px] font-mono text-gray-500 px-2 pt-2 mt-1 border-t border-white/5">
+        <div className="flex items-center gap-2 md:gap-4 justify-self-start">
+          {isProcessing ? (
+            <span className="flex items-center gap-1.5 md:gap-2 text-amber-400 text-[8px] md:text-[10px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span> ORCHESTRATING...
+            </span>
+          ) : isListening ? (
+            <span className="flex items-center gap-1.5 md:gap-2 text-red-500 animate-pulse text-[8px] md:text-[10px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> INTERCEPTING...
+            </span>
+          ) : isPinDropMode ? (
+            <span className="flex items-center gap-1.5 md:gap-2 text-purple-400 text-[8px] md:text-[10px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> AWAITING COORDS
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 md:gap-2 text-emerald-500/80 text-[8px] md:text-[10px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span> SYSTEM ONLINE
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 justify-self-center">
+            <span className="hidden md:inline text-[10px] font-mono text-gray-400 tracking-widest">A PRODUCT OF</span>
+            <span className="text-[9px] md:text-[11px] font-bold tracking-[0.1em] md:tracking-[0.2em] text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400 drop-shadow-[0_0_8px_rgba(139,92,246,0.4)]">
+              RANAJIT DHAR
+            </span>
+        </div>
+
+        <div className="hidden md:flex items-center gap-6 opacity-80 justify-self-end">
+           <span className="flex items-center gap-1.5 text-cyan-400/90">
+             <Clock3 className="w-3.5 h-3.5" /> LATENCY: <span className={latency ? 'text-cyan-300' : 'text-gray-600'}>{latency ? `${latency}ms` : '--'}</span>
+           </span>
+           <span className="opacity-30">|</span>
+           <span className="flex items-center gap-1.5">
+             STABILITY: <span className="text-emerald-500">{stability}%</span>
+           </span>
+           <span className="opacity-30">|</span>
+           <span className="flex items-center gap-1.5 text-violet-400/90">
+             <ShieldCheck className="w-3.5 h-3.5 text-violet-400" /> SECURE: {securityKey}
+           </span>
+        </div>
+      </div>
     </div>
-
-    <div className="fixed bottom-0 left-0 w-full hidden md:flex bg-[#020202] border-t border-white/10 flex justify-between items-center text-[10px] font-mono text-gray-500 px-3 md:px-8 py-2 z-[9999] shadow-none">
-      <div className="flex items-center gap-2 md:gap-4">
-        {isProcessing ? (
-          <span className="flex items-center gap-1.5 md:gap-2 text-amber-400 text-[8px] md:text-[10px]">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span> ORCHESTRATING...
-          </span>
-        ) : isListening ? (
-          <span className="flex items-center gap-1.5 md:gap-2 text-red-500 animate-pulse text-[8px] md:text-[10px]">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> INTERCEPTING...
-          </span>
-        ) : isPinDropMode ? (
-          <span className="flex items-center gap-1.5 md:gap-2 text-purple-400 text-[8px] md:text-[10px]">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span> AWAITING COORDS
-          </span>
-        ) : (
-          <span className="flex items-center gap-1.5 md:gap-2 text-emerald-500/80 text-[8px] md:text-[10px]">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span> SYSTEM ONLINE
-          </span>
-        )}
-      </div>
-
-      <div className="flex items-center gap-1 md:absolute md:left-1/2 md:-translate-x-1/2 justify-end">
-          <span className="hidden md:inline text-[10px] font-mono text-gray-400 tracking-widest">A PRODUCT OF</span>
-          <span className="text-[9px] md:text-[11px] font-bold tracking-[0.1em] md:tracking-[0.2em] text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]">
-            RANAJIT DHAR
-          </span>
-      </div>
-
-      <div className="hidden md:flex items-center gap-6 opacity-80">
-         <span className="flex items-center gap-1.5 text-blue-400/90">
-           <Clock3 className="w-3.5 h-3.5" /> LATENCY: <span className={latency ? 'text-blue-300' : 'text-gray-600'}>{latency ? `${latency}ms` : '--'}</span>
-         </span>
-         <span className="opacity-30">|</span>
-         <span className="flex items-center gap-1.5">
-           STABILITY: <span className="text-emerald-500">{stability}%</span>
-         </span>
-         <span className="opacity-30">|</span>
-         <span className="flex items-center gap-1.5 text-purple-400/90">
-           <ShieldCheck className="w-3.5 h-3.5 text-purple-500" /> SECURE: {securityKey}
-         </span>
-      </div>
-    </div>
-    </>
   );
 }
