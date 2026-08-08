@@ -1,40 +1,44 @@
-import { genkit, z } from 'genkit';
-import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
-import { logger } from 'genkit/logging';
+import { VertexAI } from '@google-cloud/vertexai';
 
-// ==========================================
-// LAYER 1: GOOGLE ADK (The Operating System)
-// ==========================================
-export const ai = genkit({
-  plugins: [googleAI({ apiKey: process.env.GEMINI_API_KEY })],
-  model: gemini15Flash, // The Reasoning Brain (Cost-effective & Fast)
-});
+// Initialize Vertex AI with fallback for Local Demo Mode
+const projectId = process.env.GOOGLE_CLOUD_PROJECT || 'demo-chayra-ai-local';
+const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
 
-// Enable Live Observability & Telemetry Tracing for Judges
-logger.setLogLevel('debug');
+export const vertexAI = new VertexAI({ project: projectId, location: location });
 
-// ==========================================
-// LAYER 2: THE ENTERPRISE AGENT REGISTRY
-// ==========================================
-// This allows discovery, versioning, and secure access of all Swarm agents
-export class AgentRegistry {
-  private static agents: Map<string, any> = new Map();
+export interface AgentMetadata {
+  name: string;
+  version: string;
+  role: string;
+  status: 'ACTIVE' | 'STANDBY' | 'DEPRECATED';
+  clearanceLevel: 'TIER_1' | 'TIER_2' | 'TIER_3';
+}
 
-  // Register an ADK flow into the global enterprise fleet
-  static registerAgent(name: string, agentFlow: any) {
-    this.agents.set(name, agentFlow);
-    console.log(`[Agent Registry] Securely Registered: ${name}`);
+export class EnterpriseAgentRegistry {
+  private static agents: Map<string, { handler: Function, metadata: AgentMetadata }> = new Map();
+
+  // 1. Zero-Trust Agent Registration
+  static registerAgent(metadata: AgentMetadata, handler: Function) {
+    console.log(`[Enterprise Registry]: Securing Identity for Agent -> ${metadata.name} (v${metadata.version}) | Clearance: ${metadata.clearanceLevel}`);
+    this.agents.set(metadata.name, { handler, metadata });
   }
 
-  // Gateway: Retrieve an agent for execution
+  // 2. Agent Gateway & Live Observability Hook
   static getAgent(name: string) {
     if (!this.agents.has(name)) {
-      throw new Error(`[Agent Gateway] Agent '${name}' not found in Registry or unauthorized access.`);
+      throw new Error(`[Agent Gateway] Zero-Trust Alert: Agent '${name}' not found or access denied.`);
     }
-    return this.agents.get(name);
+    const agent = this.agents.get(name);
+    
+    // Live Observability Trace
+    const traceId = `TRC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    console.log(`[Live Observability]: Trace [${traceId}] - Agent '${name}' triggered. Status: ${agent?.metadata.status}`);
+    
+    return agent?.handler;
   }
 
-  static getAllRegisteredAgents() {
-    return Array.from(this.agents.keys());
+  // 3. Fleet Status Check
+  static listActiveFleet() {
+    return Array.from(this.agents.values()).map(a => a.metadata);
   }
 }

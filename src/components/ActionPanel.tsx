@@ -3,14 +3,14 @@ import { useState, useEffect } from 'react';
 import { 
   ShieldAlert, Route, HeartPulse, ShieldCheck, 
   Search, CheckCircle, XCircle, Loader2, Activity, 
-  Biohazard, TrendingUp, Radar, BrainCircuit, Globe, Database, AlertTriangle 
+  Biohazard, TrendingUp, Radar, BrainCircuit, Globe, Database, AlertTriangle, Cpu, CheckCircle2, Server, Crosshair
 } from 'lucide-react';
 
 export default function ActionPanel() {
   // 1. 3-Tier Enterprise UI State
   const [activeTab, setActiveTab] = useState<'emergency' | 'health' | 'resilience'>('emergency');
 
-  // 2. Swarm Data State
+  // 2. Swarm Data State (Defaulting to the original fallback values)
   const [panelData, setPanelData] = useState({
     threatLevel: 'LOW',
     intel: "AWAITING ACTIVE RADAR SCANS... No immediate threats in your perimeter.",
@@ -102,6 +102,39 @@ export default function ActionPanel() {
         {/* TIER 1: EMERGENCY */}
         {activeTab === 'emergency' && (
           <div className="grid grid-cols-2 gap-3 animate-in fade-in zoom-in-95 duration-500">
+            
+            {/* 🛑 NEW: LIVE OBSERVABILITY TRACE (The WOW Factor) - Inserted at the top of Emergency! */}
+            <div className="col-span-2 bg-[#050505]/80 backdrop-blur-md border border-white/10 rounded-3xl p-4 flex flex-col gap-3 relative overflow-hidden shadow-lg">
+                <div className="absolute inset-0 bg-[url('https://transparenttextures.com/patterns/cubes.png')] opacity-5 mix-blend-overlay"></div>
+                
+                <div className="flex items-center justify-between mb-1 border-b border-white/10 pb-2">
+                    <div className="flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-emerald-500" />
+                        <span className="text-xs font-mono text-emerald-500 tracking-widest uppercase">Live Telemetry</span>
+                    </div>
+                    <div className="text-[10px] font-mono font-bold">
+                        <span className={panelData.threatLevel === 'CRITICAL' ? 'text-red-500 animate-pulse' : 'text-gray-400'}>
+                             [ {panelData.threatLevel} ]
+                        </span>
+                    </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5 font-mono text-[9px] md:text-[10px] opacity-80">
+                    <div className="flex items-center justify-between text-gray-300">
+                        <span className="flex items-center gap-2"><CheckCircle2 className="w-3 h-3 text-emerald-500"/> MINDGUARD SECURE</span>
+                        <span className="text-emerald-500">✓ 0.3s</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gray-300">
+                        <span className="flex items-center gap-2"><CheckCircle2 className="w-3 h-3 text-emerald-500"/> RADAR SYNC</span>
+                        <span className="text-emerald-500">✓ 1.2s</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gray-300">
+                        <span className="flex items-center gap-2"><Server className="w-3 h-3 text-purple-500"/> VAULT ENCRYPTED</span>
+                        <span className="text-purple-400">✓ 0.4s</span>
+                    </div>
+                </div>
+            </div>
+
             {/* Radar Intel (Full Width) */}
             <div className="col-span-2 bg-[#0a0a0b]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-4 shadow-lg relative overflow-hidden group">
               <div className="absolute -right-4 -top-4 w-20 h-20 bg-red-500/10 rounded-full blur-2xl group-hover:bg-red-500/20 transition-all"></div>

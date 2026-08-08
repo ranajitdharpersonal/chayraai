@@ -1,5 +1,6 @@
-import { ai, AgentRegistry } from '../adk/registry';
-import { z } from 'genkit';
+import { EnterpriseAgentRegistry, vertexAI } from '../adk/registry';
+
+const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 async function fetchNearestFacility(lat: number, lng: number, type: string) {
   let query = "";
@@ -33,72 +34,54 @@ async function fetchNearestFacility(lat: number, lng: number, type: string) {
   }
 }
 
-export const navigatorFlow = ai.defineFlow(
-  {
-    name: 'Navigator_TacticalRouting',
-    inputSchema: z.object({
-      input: z.string(),
-      userCoords: z.object({ lat: z.number(), lng: z.number() }).optional(),
-    }),
-    outputSchema: z.object({
-      text: z.string(),
-      destCoords: z.any().nullable(),
-      isRealData: z.boolean()
-    }),
-  },
-  async (payload) => {
-    console.log(`[Navigator]: Executing DUAL-SCAN for real-world safe zones...`);
-    if (!payload.userCoords) {
-      throw new Error("User coordinates missing. Cannot calculate real-world route.");
-    }
-
-    try {
-      const { output } = await ai.generate({
-        prompt: `
-          You are the Navigator Agent in a crisis rescue system.
-          We will automatically search for BOTH "hospital" and "bunker" in the background.
-          You need to decide which one is the HIGHEST PRIORITY based on the emergency to draw the primary map route.
-          User Emergency: "${payload.input}"
-        `,
-        output: {
-          schema: z.object({
-            primaryNeed: z.enum(["hospital", "bunker"]),
-            instruction: z.string()
-          })
-        }
-      });
-
-      const decision = output as { primaryNeed: "hospital" | "bunker", instruction: string };
-      console.log(`[Navigator]: Parallel searching for BOTH Hospital & Bunker near [${payload.userCoords.lat}, ${payload.userCoords.lng}]`);
-
-      const [hospitalCoords, bunkerCoords] = await Promise.all([
-        fetchNearestFacility(payload.userCoords.lat, payload.userCoords.lng, 'hospital'),
-        fetchNearestFacility(payload.userCoords.lat, payload.userCoords.lng, 'bunker')
-      ]);
-
-      let responseText = "";
-      let finalDestCoords = null;
-
-      if (hospitalCoords && bunkerCoords) {
-        responseText = `Verified Hospital AND Bunker BOTH detected within 25km! ${decision.instruction}`;
-        finalDestCoords = decision.primaryNeed === 'hospital' ? hospitalCoords : bunkerCoords;
-      } else if (hospitalCoords && !bunkerCoords) {
-        responseText = `Verified Hospital detected, but NO BUNKERS found within 25km radius. ${decision.instruction}`;
-        finalDestCoords = hospitalCoords;
-      } else if (!hospitalCoords && bunkerCoords) {
-        responseText = `Verified Bunker detected, but NO HOSPITALS found within 25km radius. ${decision.instruction}`;
-        finalDestCoords = bunkerCoords;
-      } else {
-        responseText = `CRITICAL ALERT: Neither Hospital nor Bunker found within a 25km radius! DO NOT move blindly. Seek immediate hard cover and stay out of sight.`;
-        finalDestCoords = null;
-      }
-
-      return { text: responseText, destCoords: finalDestCoords, isRealData: !!finalDestCoords };
-    } catch (error) {
-      console.error(`[Navigator]: Routing failed.`, error);
-      return { text: "SYSTEM WARNING: Satellite map link disrupted. Cannot verify any safe zones. Stay hidden, conserve battery, and await rescue.", destCoords: null, isRealData: false };
-    }
+async function runNavigator(data: { input: string, userCoords?: { lat: number, lng: number } }) {
+  console.log(`[Navigator]: Executing DUAL-SCAN for real-world safe zones...`);
+  if (!data.userCoords) {
+    throw new Error("User coordinates missing. Cannot calculate real-world route.");
   }
-);
+  try {
+    const prompt = `
+      You are the Navigator Agent in a crisis rescue system.
+      We will automatically search for BOTH "hospital" and "bunker" in the background.
+      You need to decide which one is the HIGHEST PRIORITY based on the emergency to draw the primary map route.
+      User Emergency: "${data.input}"
+      Return strictly a JSON object: {"primaryNeed": "hospital" OR "bunker", "instruction": "string"}
+    `;
+    const resp = await generativeModel.generateContent(prompt);
+    const text = resp.response.candidates?.[0].content.parts[0].text || "{}";
+    const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const decision = JSON.parse(cleanJson) as { primaryNeed: "hospital" | "bunker", instruction: string };
+    
+    console.log(`[Navigator]: Parallel searching for BOTH Hospital & Bunker near [${data.userCoords.lat}, ${data.userCoords.lng}]`);
+    const [hospitalCoords, bunkerCoords] = await Promise.all([
+      fetchNearestFacility(data.userCoords.lat, data.userCoords.lng, 'hospital'),
+      fetchNearestFacility(data.userCoords.lat, data.userCoords.lng, 'bunker')
+    ]);
+    
+    let responseText = "";
+    let finalDestCoords = null;
+    
+    if (hospitalCoords && bunkerCoords) {
+      responseText = `Verified Hospital AND Bunker BOTH detected within 25km! ${decision.instruction}`;
+      finalDestCoords = decision.primaryNeed === 'hospital' ? hospitalCoords : bunkerCoords;
+    } else if (hospitalCoords && !bunkerCoords) {
+      responseText = `Verified Hospital detected, but NO BUNKERS found within 25km radius. ${decision.instruction}`;
+      finalDestCoords = hospitalCoords;
+    } else if (!hospitalCoords && bunkerCoords) {
+      responseText = `Verified Bunker detected, but NO HOSPITALS found within 25km radius. ${decision.instruction}`;
+      finalDestCoords = bunkerCoords;
+    } else {
+      responseText = `CRITICAL ALERT: Neither Hospital nor Bunker found within a 25km radius! DO NOT move blindly. Seek immediate hard cover and stay out of sight.`;
+      finalDestCoords = null;
+    }
+    return { text: responseText, destCoords: finalDestCoords, isRealData: !!finalDestCoords };
+  } catch (error) {
+    console.error(`[Navigator]: Routing failed.`, error);
+    return { text: "SYSTEM WARNING: Satellite map link disrupted. Cannot verify any safe zones. Stay hidden, conserve battery, and await rescue.", destCoords: null, isRealData: false };
+  }
+}
 
-AgentRegistry.registerAgent('Navigator', navigatorFlow);
+EnterpriseAgentRegistry.registerAgent(
+  { name: 'Navigator', version: '3.0.0', role: 'Tactical Routing', status: 'ACTIVE', clearanceLevel: 'TIER_2' },
+  runNavigator
+);

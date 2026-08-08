@@ -1,54 +1,41 @@
-import { ai, AgentRegistry } from '../adk/registry';
-import { z } from 'genkit';
+import { EnterpriseAgentRegistry } from '../adk/registry';
+import { vertexAI } from '../adk/registry';
 
-// 1. Define the Schema outside to make TypeScript happy
-const ScavengerOutputSchema = z.object({
-  threatLevel: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']),
-  emergencyCategory: z.string(),
-  mentionedLocation: z.string().nullable(),
-  requiredAgents: z.array(z.string())
-});
+// Initialize the native model
+const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-// 2. Extract the exact TypeScript Type from the Zod Schema
-type ScavengerOutput = z.infer<typeof ScavengerOutputSchema>;
+async function runScavenger(data: { input: string }) {
+  console.log(`[Scavenger]: Extracting tactical context using Native Vertex AI...`);
+  
+  try {
+    const prompt = `
+      You are the Scavenger agent for an emergency response system.
+      Analyze the following crisis input: "${data.input}"
+      Extract the threat level (HIGH, LOW, CRITICAL) and determine which of these agents are required: Medical, Navigator, Vault.
+      Return strictly a JSON object with keys: "threatLevel" (string) and "requiredAgents" (array of strings).
+    `;
+    
+    const resp = await generativeModel.generateContent(prompt);
+    const responseText = resp.response.candidates?.[0].content.parts[0].text || "{}";
+    
+    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanJson);
 
-export const scavengerFlow = ai.defineFlow(
-  {
-    name: 'Scavenger_Extraction',
-    inputSchema: z.object({ input: z.string(), context: z.any().optional() }),
-    outputSchema: ScavengerOutputSchema,
-  },
-  // 3. Explicitly tell TypeScript we are returning a Promise of ScavengerOutput
-  async (payload): Promise<ScavengerOutput> => {
-    console.log(`[Scavenger]: Extracting raw emergency data...`);
-    try {
-      const { output } = await ai.generate({
-        prompt: `
-          You are the Scavenger Agent in a crisis rescue system.
-          Analyze the following raw emergency text from a victim and extract critical data.
-          Required Agents must be chosen from: ["Medical", "Navigator", "Vault"]
-          Raw Emergency Text: "${payload.input}"
-        `,
-        output: {
-          schema: ScavengerOutputSchema
-        }
-      });
-      
-      // Directly return the cleanly generated output
-      return output as ScavengerOutput;
-
-    } catch (error) {
-      console.error(`[Scavenger]: AI Extraction failed.`, error);
-      
-      // 4. Force type cast as ScavengerOutput so TypeScript knows it's 100% valid
-      return { 
-        threatLevel: "CRITICAL", 
-        emergencyCategory: "Unknown", 
-        mentionedLocation: null, 
-        requiredAgents: ["Medical", "Navigator"] 
-      } as ScavengerOutput;
-    }
+  } catch (error) {
+    console.error("[Scavenger]: Parsing failed, falling back to default protocols.", error);
+    // Fail-safe returns all agents just in case
+    return { threatLevel: "UNKNOWN", requiredAgents: ["Medical", "Navigator", "Vault"] };
   }
-);
+}
 
-AgentRegistry.registerAgent('Scavenger', scavengerFlow);
+// Zero-Trust Registration
+EnterpriseAgentRegistry.registerAgent(
+  {
+    name: 'Scavenger',
+    version: '3.0.0',
+    role: 'Context & Intent Extractor',
+    status: 'ACTIVE',
+    clearanceLevel: 'TIER_1'
+  },
+  runScavenger
+);

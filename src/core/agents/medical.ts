@@ -1,5 +1,6 @@
-import { ai, AgentRegistry } from '../adk/registry';
-import { z } from 'genkit';
+import { EnterpriseAgentRegistry, vertexAI } from '../adk/registry';
+
+const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 const fallbackProtocols = {
   bleeding: ["Apply firm, direct pressure to the wound with a clean cloth.", "Keep the injured area elevated above the heart if possible.", "If the bleeding doesn't stop, apply a tourniquet 2-3 inches above the wound."],
@@ -18,30 +19,28 @@ function getOfflineProtocol(context: string): string[] {
   return fallbackProtocols.default;
 }
 
-export const medicalFlow = ai.defineFlow(
-  {
-    name: 'Medical_Triage',
-    inputSchema: z.object({ input: z.string(), context: z.any().optional() }),
-    outputSchema: z.array(z.string()),
-  },
-  async (payload) => {
-    console.log(`[Medical]: Analyzing trauma context with Enterprise Swarm...`);
-    try {
-      const { output } = await ai.generate({
-        prompt: `
-          You are the Medical Agent in a crisis rescue system.
-          Provide life-saving, concise first-aid steps based on the user's emergency.
-          Keep it short, actionable, and under stress-friendly conditions. Maximum 3 or 4 steps.
-          Emergency Context: "${payload.input}"
-        `,
-        output: { schema: z.array(z.string()) }
-      });
-      return (output as string[]) || getOfflineProtocol(payload.input);
-    } catch (error) {
-      console.error(`[Medical]: AI analysis failed. Activating Offline Lifeline Protocols!`, error);
-      return getOfflineProtocol(payload.input);
-    }
+async function runMedical(data: { input: string, context?: any }) {
+  console.log(`[Medical]: Analyzing trauma context with Enterprise Swarm...`);
+  try {
+    const prompt = `
+      You are the Medical Agent in a crisis rescue system.
+      Provide life-saving, concise first-aid steps based on the user's emergency.
+      Keep it short, actionable, and under stress-friendly conditions. Maximum 3 or 4 steps.
+      Emergency Context: "${data.input}"
+      Return strictly a JSON array of strings: ["step 1", "step 2", "step 3"]
+    `;
+    const resp = await generativeModel.generateContent(prompt);
+    const text = resp.response.candidates?.[0].content.parts[0].text || "[]";
+    const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const result = JSON.parse(cleanJson);
+    return Array.isArray(result) && result.length > 0 ? result : getOfflineProtocol(data.input);
+  } catch (error) {
+    console.error(`[Medical]: AI analysis failed. Activating Offline Lifeline Protocols!`, error);
+    return getOfflineProtocol(data.input);
   }
-);
+}
 
-AgentRegistry.registerAgent('Medical', medicalFlow);
+EnterpriseAgentRegistry.registerAgent(
+  { name: 'Medical', version: '3.0.0', role: 'Triage Specialist', status: 'ACTIVE', clearanceLevel: 'TIER_1' },
+  runMedical
+);

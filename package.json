@@ -9,12 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@genkit-ai/core": "^1.40.1",
-    "@genkit-ai/googleai": "^1.28.0",
+    "@google-cloud/vertexai": "^1.12.0",
     "firebase": "^12.17.1",
     "firebase-admin": "^14.2.0",
     "framer-motion": "^13.0.0",
-    "genkit": "^1.40.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.30.0",
     "next": "16.3.0",
