@@ -386,8 +386,8 @@ export default function HelpBar() {
       </div>
 
       {/* STATUS FOOTER — now in normal flow inside the same box, no longer fixed to the viewport */}
-      <div className="hidden md:grid grid-cols-3 w-full items-center text-[10px] font-mono text-gray-500 px-2 pt-2 mt-1 border-t border-white/5">
-        <div className="flex items-center gap-2 md:gap-4 justify-self-start">
+      <div className="hidden md:flex w-full items-center justify-between gap-3 text-[10px] font-mono text-gray-500 px-2 pt-2 mt-1 border-t border-white/5 whitespace-nowrap overflow-hidden">
+        <div className="flex items-center gap-2 md:gap-4 shrink-0">
           {isProcessing ? (
             <span className="flex items-center gap-1.5 md:gap-2 text-amber-400 text-[8px] md:text-[10px]">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span> ORCHESTRATING...
@@ -407,24 +407,20 @@ export default function HelpBar() {
           )}
         </div>
 
-        <div className="flex items-center gap-1 justify-self-center">
-            <span className="hidden md:inline text-[10px] font-mono text-gray-400 tracking-widest">A PRODUCT OF</span>
-            <span className="text-[9px] md:text-[11px] font-bold tracking-[0.1em] md:tracking-[0.2em] text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400 drop-shadow-[0_0_8px_rgba(139,92,246,0.4)]">
+        <div className="flex items-center gap-1 shrink-0 overflow-hidden">
+            <span className="hidden lg:inline text-[10px] font-mono text-gray-400 tracking-widest">A PRODUCT OF</span>
+            <span className="text-[9px] md:text-[11px] font-bold tracking-[0.1em] md:tracking-[0.15em] text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400 drop-shadow-[0_0_8px_rgba(139,92,246,0.4)] truncate">
               RANAJIT DHAR
             </span>
         </div>
 
-        <div className="hidden md:flex items-center gap-6 opacity-80 justify-self-end">
+        <div className="flex items-center gap-4 opacity-80 shrink-0">
            <span className="flex items-center gap-1.5 text-cyan-400/90">
-             <Clock3 className="w-3.5 h-3.5" /> LATENCY: <span className={latency ? 'text-cyan-300' : 'text-gray-600'}>{latency ? `${latency}ms` : '--'}</span>
+             <Clock3 className="w-3.5 h-3.5" /> <span className={latency ? 'text-cyan-300' : 'text-gray-600'}>{latency ? `${latency}ms` : '--'}</span>
            </span>
            <span className="opacity-30">|</span>
            <span className="flex items-center gap-1.5">
              STABILITY: <span className="text-emerald-500">{stability}%</span>
-           </span>
-           <span className="opacity-30">|</span>
-           <span className="flex items-center gap-1.5 text-violet-400/90">
-             <ShieldCheck className="w-3.5 h-3.5 text-violet-400" /> SECURE: {securityKey}
            </span>
         </div>
       </div>

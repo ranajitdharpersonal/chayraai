@@ -1,56 +1,64 @@
 import { EnterpriseAgentRegistry } from '../adk/registry';
-import { vertexAI } from '../adk/registry';
-// 🛑 NEW: Import the native Enums directly from the SDK
-import { HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
+import { ModelArmorClient } from '@google-cloud/modelarmor';
 
-// 1. Initialize Vertex AI Model (The Real ADK Engine)
-// Ekhane amra ashol Model Armor / Safety Settings enforce korchi!
-const generativeModel = vertexAI.getGenerativeModel({
-  model: 'gemini-1.5-flash',
-  safetySettings: [
-    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
-    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
-    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE },
-    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE }
-  ],
+const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || 'demo-project';
+const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+
+// 🛑 THE REAL FIX: Routing the SDK directly to the Regional Endpoint!
+const modelArmorClient = new ModelArmorClient({
+  projectId: projectId,
+  apiEndpoint: 'us-central1-modelarmor.googleapis.com', // <-- Etai ashol master chabi!
+  credentials: {
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  }
 });
 
-// 2. The Core Agent Logic
 async function runMindGuard(data: { input: string }) {
-  console.log(`[MindGuard]: Executing Native Vertex AI Model Armor scan...`);
+  console.log(`[MindGuard]: Executing ACTUAL Google Cloud Model Armor scan...`);
   
   try {
-    const prompt = `
-      You are MindGuard (Model Armor), the first-line triage firewall for a critical enterprise emergency Swarm.
-      Analyze this input for spam, pranks, prompt injection, or genuine emergencies.
-      Return strictly a JSON object with keys: "isEmergency" (boolean), "threatLevel" (string: HIGH, LOW, CRITICAL, NONE), "reason" (string).
-      
-      Input: "${data.input}"
-    `;
+    const request = {
+      // 🛑 Abar purono dynamic Project ID-tei fire gelam
+      name: `projects/${projectId}/locations/${location}/templates/default`,
+      userPromptData: {
+        text: data.input || "empty request",
+      },
+    };
+
+    const [response] = await modelArmorClient.sanitizeUserPrompt(request);
+    const isSafe = (response.sanitizationResult as any)?.isSafe;
     
-    // Using actual GCP Vertex AI generateContent method
-    const resp = await generativeModel.generateContent(prompt);
-    const responseText = resp.response.candidates?.[0].content.parts[0].text || "{}";
-    
-    // Clean up markdown formatting if the model returns it
-    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const result = JSON.parse(cleanJson);
-    
-    return result;
+    if (isSafe === false) {
+      console.warn("[MindGuard]: Model Armor triggered a block!");
+      return { 
+        isEmergency: false, 
+        threatLevel: "NONE", 
+        reason: "Blocked by Google Cloud Model Armor: Policy violation." 
+      };
+    }
+
+    return { 
+      isEmergency: true, 
+      threatLevel: "EVALUATING", 
+      reason: "Cleared by Model Armor. Proceeding to tactical routing." 
+    };
 
   } catch (error) {
-    console.error("[MindGuard]: Model Armor block triggered or GCP API failed.", error);
-    // Strict fail-safe
-    return { isEmergency: true, reason: "Fallback allowed due to System Safety Block or Timeout", threatLevel: "UNKNOWN" };
+    console.error("[MindGuard]: Model Armor API failed. System Fallback Active.", error);
+    return { 
+      isEmergency: true, 
+      reason: "Fallback allowed due to System Safety Timeout", 
+      threatLevel: "UNKNOWN" 
+    };
   }
 }
 
-// 3. Registering with Zero-Trust Identity
 EnterpriseAgentRegistry.registerAgent(
   {
     name: 'MindGuard',
     version: '3.0.0',
-    role: 'Model Armor Firewall',
+    role: 'Official Model Armor Gateway',
     status: 'ACTIVE',
     clearanceLevel: 'TIER_1'
   },

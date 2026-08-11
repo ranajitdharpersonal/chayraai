@@ -1,10 +1,17 @@
-import { getApps, initializeApp } from 'firebase-admin/app';
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { vertexAI } from './registry'; // 🛑 NEW: Vertex AI Import for the Prediction Engine
 
-// 1. Enterprise Initialization (Strictly GCP - NO MOCKS)
+// 1. Enterprise Initialization (Explicit Credentials Fix for GCP Authentication)
 if (!getApps().length) {
-  initializeApp();
+  initializeApp({
+    credential: cert({
+      projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+      clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
+      // The magic regex fix for the newline issue!
+      privateKey: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    })
+  });
 }
 const db = getFirestore();
 

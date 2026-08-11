@@ -46,8 +46,8 @@ export default function Home() {
           <ActionPanel />
         </div>
 
-        {/* HelpBar — Centered Command Module for 3.0 */}
-        <div className="absolute bottom-[20px] left-2 right-2 md:bottom-12 md:left-1/2 md:-translate-x-1/2 md:w-[600px] lg:w-[800px] pointer-events-auto z-50">
+        {/* HelpBar — anchored left of the ActionPanel column, pushed lower so it never climbs into it */}
+        <div className="absolute bottom-[20px] left-2 right-2 md:bottom-6 md:left-6 md:right-[440px] md:w-auto pointer-events-auto z-50">
           <HelpBar />
         </div>
 

@@ -1,10 +1,21 @@
 import { VertexAI } from '@google-cloud/vertexai';
 
-// Initialize Vertex AI with fallback for Local Demo Mode
-const projectId = process.env.GOOGLE_CLOUD_PROJECT || 'demo-chayra-ai-local';
+// 1. Enterprise Explicit Credentials (Fixing the Auth Crash for Vertex)
+// Update: Using GOOGLE_CLOUD_PROJECT_ID to match your .env file
+const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || 'demo-chayra-ai-local';
 const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
 
-export const vertexAI = new VertexAI({ project: projectId, location: location });
+export const vertexAI = new VertexAI({ 
+  project: projectId, 
+  location: location,
+  // 🛑 The Magic Fix: Injecting explicit auth so the AI doesn't get denied access
+  googleAuthOptions: {
+    credentials: {
+      client_email: process.env.GOOGLE_CLIENT_EMAIL,
+      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    }
+  }
+});
 
 export interface AgentMetadata {
   name: string;
