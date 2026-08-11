@@ -2,7 +2,7 @@ import { EnterpriseAgentRegistry } from '../adk/registry';
 import { vertexAI } from '../adk/registry';
 
 // Initialize the native model
-const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
 async function runScavenger(data: { input: string }) {
   console.log(`[Scavenger]: Extracting tactical context using Native Vertex AI...`);

@@ -79,23 +79,38 @@ export default function MapCore() {
       .then(data => setWorldGeoJson(data))
       .catch(err => console.error("GeoJSON load failed:", err));
 
+    // 🛑 THE WOW FACTOR FIX: Dynamic Autonomous Radar Polling
     const fetchRadarData = async () => {
       try {
-        setIsLoading(true);
+        // Only show loading screen if it's the very first load
+        setCrisisZones(prev => {
+           if (prev.length === 0) setIsLoading(true);
+           return prev;
+        });
+
         const response = await fetch('/api/background-radar');
-        if (response.ok) await response.json();
-        
-        setCrisisZones([
-          { id: '1', lat: 31.4167, lng: 34.3333, name: 'CRITICAL WAR ZONE: GAZA', type: 'war' },
-          { id: '2', lat: 48.3794, lng: 31.1656, name: 'ACTIVE CONFLICT: UKRAINE', type: 'war' }
-        ]);
+        if (response.ok) {
+           const data = await response.json();
+           if (data.success && data.threats) {
+              // 🛑 Automatically injecting live data into the map!
+              setCrisisZones(data.threats);
+           }
+        }
       } catch (error) {
         console.error("Radar Sync Failed:", error);
       } finally {
         setIsLoading(false);
       }
     };
+    
+    // Initial fetch
     fetchRadarData();
+
+    // 🛑 Background Polling Loop (Every 15 Seconds)
+    // Map will silently update without any user interaction!
+    const radarInterval = setInterval(fetchRadarData, 15000);
+
+    return () => clearInterval(radarInterval);
   }, []);
 
   useEffect(() => {

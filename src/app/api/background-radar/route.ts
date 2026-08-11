@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server';
 import { scanGlobalThreats } from '@/core/agents/radar';
 import { EnterpriseAgentRegistry } from '@/core/adk/registry';
 import { PredictiveMemoryBank } from '@/core/adk/memory';
-
 // Force load MindGuard into the Registry
-import '@/core/agents/mindguard'; 
+import '@/core/agents/mindguard';
 
 // ==========================================
 // PHASE 4: THE 24/7 AUTONOMOUS AGENT RUNTIME
@@ -12,7 +11,6 @@ import '@/core/agents/mindguard';
 // This endpoint is designed to be triggered asynchronously by a background scheduler
 export async function GET(request: Request) {
   console.log("[Autonomous Engine]: Initiating background perimeter scan...");
-
   try {
     // 1. Fetch live global threats (NASA, USGS, War Zones)
     const threats = await scanGlobalThreats();
@@ -26,11 +24,11 @@ export async function GET(request: Request) {
        
        if (mindguardFlow) {
            // Run the threat through our Model Armor
-           const securityCheck = await mindguardFlow({ 
-             input: topThreat.name 
-           });
-    
-           if (securityCheck.isEmergency) {
+           const securityCheck = await mindguardFlow({
+              input: topThreat.name 
+            });
+            
+            if (securityCheck.isEmergency) {
              // 3. Save to Persistent Predictive Memory autonomously
              await PredictiveMemoryBank.saveSituationState('global_background_watch', {
                lastThreat: topThreat.name,
@@ -44,11 +42,13 @@ export async function GET(request: Request) {
        }
     }
 
-    return NextResponse.json({ 
-       success: true, 
-       message: "Autonomous background scan complete", 
-       activeThreats: threats.length 
-     });
+    // 🛑 THE FIX: Added "threats: threats" to send the actual array to the Map!
+    return NextResponse.json({
+        success: true,
+        message: "Autonomous background scan complete",
+        activeThreats: threats.length,
+        threats: threats 
+      });
 
   } catch (error) {
     console.error("[Autonomous Engine]: Background cycle failed.", error);

@@ -1,6 +1,6 @@
 import { EnterpriseAgentRegistry, vertexAI } from '../adk/registry';
 
-const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
 async function runVerifier(data: { input: string, radarIntel?: string }) {
   console.log(`[Verifier]: Generating Real Evidence Panel...`);

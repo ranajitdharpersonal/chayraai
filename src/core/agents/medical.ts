@@ -1,6 +1,6 @@
 import { EnterpriseAgentRegistry, vertexAI } from '../adk/registry';
 
-const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
 const fallbackProtocols = {
   bleeding: ["Apply firm, direct pressure to the wound with a clean cloth.", "Keep the injured area elevated above the heart if possible.", "If the bleeding doesn't stop, apply a tourniquet 2-3 inches above the wound."],

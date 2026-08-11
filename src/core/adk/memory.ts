@@ -16,7 +16,7 @@ if (!getApps().length) {
 const db = getFirestore();
 
 // Initialize the native model for prediction
-const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
 export class PredictiveMemoryBank {
   

@@ -1,6 +1,6 @@
 import { EnterpriseAgentRegistry, vertexAI } from '../adk/registry';
 
-const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
 async function runPublicHealth(data: { location?: string }) {
   console.log(`[Public Health]: Fetching trusted 15-day medical intel & mapping spread...`);

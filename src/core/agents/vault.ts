@@ -1,6 +1,6 @@
 import { EnterpriseAgentRegistry, vertexAI } from '../adk/registry';
 
-const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
 
 async function runVault(data: { input: string, context?: any }) {
   console.log(`[Vault]: Securing identity and generating beacon...`);
