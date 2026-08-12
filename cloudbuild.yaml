@@ -1,13 +1,25 @@
 steps:
-  # Step 1: Build the Enterprise Docker Image
+  # ==========================================================
+  # 1. BUILD
+  # ==========================================================
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/chayra-ai-swarm', '.']
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/chayra-ai-swarm:$COMMIT_SHA'
+      - '.'
 
-  # Step 2: Push the Image to Google Container Registry
+  # ==========================================================
+  # 2. PUSH
+  # ==========================================================
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/chayra-ai-swarm']
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/chayra-ai-swarm:$COMMIT_SHA'
 
-  # Step 3: Deploy to Cloud Run
+  # ==========================================================
+  # 3. DEPLOY PUBLIC APPLICATION
+  # ==========================================================
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
@@ -15,12 +27,35 @@ steps:
       - 'deploy'
       - 'chayra-ai-service'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/chayra-ai-swarm'
+      - 'gcr.io/$PROJECT_ID/chayra-ai-swarm:$COMMIT_SHA'
       - '--region'
       - 'us-central1'
       - '--allow-unauthenticated'
-      - '--set-env-vars'
-      - 'GOOGLE_CLOUD_PROJECT=$PROJECT_ID'
+      - '--update-env-vars'
+      - 'GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=asia-south1,MODEL_ARMOR_LOCATION=us-central1,MODEL_ARMOR_TEMPLATE_ID=default'
+
+  # ==========================================================
+  # 4. DEPLOY PRIVATE AUTONOMOUS RUNTIME
+  # ==========================================================
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'chayra-ai-runtime'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/chayra-ai-swarm:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--no-allow-unauthenticated'
+      - '--update-env-vars'
+      - 'GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=asia-south1,MODEL_ARMOR_LOCATION=us-central1,MODEL_ARMOR_TEMPLATE_ID=default'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '1'
+      - '--concurrency'
+      - '1'
 
 images:
-  - 'gcr.io/$PROJECT_ID/chayra-ai-swarm'
+  - 'gcr.io/$PROJECT_ID/chayra-ai-swarm:$COMMIT_SHA'
