@@ -1,9 +1,20 @@
-import { EnterpriseAgentRegistry, vertexAI } from '../adk/registry';
+import {
+  EnterpriseAgentRegistry,
+  vertexAI,
+} from '../adk/registry';
+
+import {
+  PredictiveMemoryBank,
+} from '../adk/memory';
 
 const generativeModel =
   vertexAI.getGenerativeModel({
     model: 'gemini-3.5-flash',
   });
+
+// ============================================================
+// PUBLIC HEALTH DATA TYPES
+// ============================================================
 
 interface OfficialAlert {
   id: string;
@@ -36,6 +47,29 @@ interface OutbreakReport {
   vulnerableZones: Zone[];
 }
 
+interface PublicHealthResult {
+  healthAdvisory: string;
+  outbreakReports: OutbreakReport[];
+  officialAlerts: OfficialAlert[];
+
+  metadata: {
+    analysisTimestamp: string;
+    source: string;
+    sourceStatus:
+      | 'AVAILABLE'
+      | 'NO_CURRENT_RECORDS'
+      | 'PARTIAL'
+      | 'UNAVAILABLE';
+
+    verificationPolicy: string;
+    forecastWindow: string;
+  };
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+
 function normalizeDate(
   value: unknown
 ): string {
@@ -64,9 +98,13 @@ function isValidZone(
   );
 }
 
+// ============================================================
+// PUBLIC HEALTH AGENT
+// ============================================================
+
 async function runPublicHealth(
   data: { location?: string }
-) {
+): Promise<PublicHealthResult> {
   console.log(
     '[Public Health]: Fetching trusted epidemic intelligence...'
   );
@@ -74,9 +112,9 @@ async function runPublicHealth(
   let officialAlerts: OfficialAlert[] = [];
 
   try {
-    // ==========================================================
+    // ========================================================
     // 1. FETCH CURRENT REAL-WORLD HEALTH INTELLIGENCE
-    // ==========================================================
+    // ========================================================
 
     const controller =
       new AbortController();
@@ -126,81 +164,116 @@ async function runPublicHealth(
               item?.id ?? 'unknown'
             ),
 
-            name:
-              String(
-                item?.fields?.name ??
-                  'Unspecified outbreak'
-              ),
+            name: String(
+              item?.fields?.name ??
+                'Unspecified outbreak'
+            ),
 
-            url:
-              String(
-                item?.href ??
-                  'https://reliefweb.int/'
-              ),
+            url: String(
+              item?.href ??
+                'https://reliefweb.int/'
+            ),
 
-            source:
-              'UN ReliefWeb',
+            source: 'UN ReliefWeb',
 
-            date:
-              normalizeDate(
-                item?.fields?.date?.created
-              ),
+            date: normalizeDate(
+              item?.fields?.date?.created
+            ),
 
             verified: true,
           })
         );
-
     } finally {
       clearTimeout(timeout);
     }
 
-    // ==========================================================
-    // 2. CURRENT DATE — NEVER HARDCODE
-    // ==========================================================
+    // ========================================================
+    // 2. CURRENT DATE
+    // ========================================================
 
     const analysisDate =
       new Date().toISOString();
 
-    // ==========================================================
-    // 3. PUBLIC HEALTH INTELLIGENCE PROMPT
-    // ==========================================================
-    //
-    // IMPORTANT:
-    // The model may analyze and forecast.
-    // It must NEVER invent an official source,
-    // official publication date, or verified outbreak.
-    //
+    // ========================================================
+    // 3. LOAD HISTORICAL PUBLIC HEALTH MEMORY
+    // ========================================================
+
+    const previousHealthState =
+      await PredictiveMemoryBank.getPublicHealthState();
+
+    // Keep the historical context bounded so we do not
+    // unnecessarily increase Gemini input tokens.
+    const historicalContext =
+      previousHealthState
+        ? JSON.stringify({
+            analysisTimestamp:
+              previousHealthState.analysisTimestamp,
+
+            sourceStatus:
+              previousHealthState.sourceStatus,
+
+            healthAdvisory:
+              previousHealthState.healthAdvisory,
+
+            officialAlerts:
+              Array.isArray(
+                previousHealthState.officialAlerts
+              )
+                ? previousHealthState
+                    .officialAlerts
+                    .slice(-10)
+                : [],
+
+            outbreakReports:
+              Array.isArray(
+                previousHealthState.outbreakReports
+              )
+                ? previousHealthState
+                    .outbreakReports
+                    .slice(-10)
+                : [],
+          })
+        : 'No previous public-health state available.';
+
+    // ========================================================
+    // 4. PUBLIC HEALTH INTELLIGENCE PROMPT
+    // ========================================================
 
     const prompt = `
 You are the Public Health Intelligence Agent for
 the ChayRa Enterprise Crisis Fleet.
 
-Analysis timestamp:
+Current analysis timestamp:
 ${analysisDate}
 
 User location context:
 ${data.location || 'Not provided'}
 
-Official source records:
+CURRENT OFFICIAL SOURCE RECORDS:
 ${JSON.stringify(officialAlerts)}
+
+PREVIOUS PUBLIC HEALTH MEMORY:
+${historicalContext}
 
 Rules:
 
-1. Treat only the supplied official records as verified facts.
+1. Treat ONLY supplied official records as verified facts.
 2. Never invent an outbreak, source, publication date,
    case count, or official confirmation.
-3. Predictions about vulnerable regions are MODEL INFERENCE,
-   not verified facts.
-4. Clearly distinguish official evidence from inference.
-5. If there is insufficient evidence, say so.
-6. Do not convert uncertainty into an emergency claim.
-7. Use only the coordinates supplied by the model when they
-   are reasonable approximate country-center coordinates.
-8. Keep the advisory concise and operational.
+3. Historical context may be used to identify trends,
+   but it does not become a verified current alert.
+4. Predictions about vulnerable regions are MODEL INFERENCE.
+5. Clearly distinguish official evidence from inference.
+6. If evidence is insufficient, explicitly say so.
+7. Never convert uncertainty into an emergency claim.
+8. Never invent official dates or source names.
+9. Keep the advisory concise and operational.
+10. Use approximate country-center coordinates only when
+    reasonably inferable.
 
 Task 1:
-Summarize meaningful public-health trends visible
-in the supplied records.
+Summarize meaningful public-health trends visible in
+the current and historical records.
 
 Task 2:
 Identify possible vulnerable neighboring regions for
@@ -216,7 +289,7 @@ Return ONLY valid JSON:
   "outbreakReports": [
     {
       "title": "string",
-      "description": "summary based only on official data",
+      "description": "summary based only on available evidence",
       "spreadForecast": "clearly labeled model inference",
       "source": "UN ReliefWeb",
       "date": "exact date from supplied official record",
@@ -237,9 +310,9 @@ Return ONLY valid JSON:
 }
 `;
 
-    // ==========================================================
-    // 4. GEMINI ANALYSIS
-    // ==========================================================
+    // ========================================================
+    // 5. GEMINI ANALYSIS
+    // ========================================================
 
     const resp =
       await generativeModel.generateContent(
@@ -260,9 +333,9 @@ Return ONLY valid JSON:
     const result =
       JSON.parse(cleanJson);
 
-    // ==========================================================
-    // 5. HARDEN MODEL OUTPUT
-    // ==========================================================
+    // ========================================================
+    // 6. HARDEN MODEL OUTPUT
+    // ========================================================
 
     const rawReports =
       Array.isArray(
@@ -299,8 +372,7 @@ Return ONLY valid JSON:
                     'Insufficient evidence for a reliable forecast.'
                 ),
 
-              // IMPORTANT:
-              // Never trust Gemini to invent provenance.
+              // Model output never determines provenance.
               source:
                 'UN ReliefWeb',
 
@@ -319,14 +391,20 @@ Return ONLY valid JSON:
                 Array.isArray(
                   report.vulnerableZones
                 )
-                  ? report.vulnerableZones.filter(
-                      isValidZone
-                    )
+                  ? report.vulnerableZones
+                      .filter(
+                        isValidZone
+                      )
                   : [],
             })
           );
 
-    return {
+    // ========================================================
+    // 7. BUILD FINAL RESULT
+    // ========================================================
+
+    const finalResult:
+      PublicHealthResult = {
       healthAdvisory:
         typeof result?.advisoryText ===
         'string'
@@ -361,6 +439,16 @@ Return ONLY valid JSON:
       },
     };
 
+    // ========================================================
+    // 8. PERSIST PUBLIC HEALTH MEMORY
+    // ========================================================
+
+    await PredictiveMemoryBank.savePublicHealthState(
+      finalResult
+    );
+
+    return finalResult;
+
   } catch (error) {
     console.error(
       '[Public Health]: Intelligence pipeline failed.',
@@ -368,10 +456,11 @@ Return ONLY valid JSON:
     );
 
     // ========================================================
-    // 6. SAFE FALLBACK
+    // 9. SAFE FALLBACK
     // ========================================================
 
-    return {
+    const fallbackResult:
+      PublicHealthResult = {
       healthAdvisory:
         'Public-health intelligence is temporarily unavailable. No new verified alert could be confirmed from the current source.',
 
@@ -398,8 +487,18 @@ Return ONLY valid JSON:
           '15 days',
       },
     };
+
+    await PredictiveMemoryBank.savePublicHealthState(
+      fallbackResult
+    );
+
+    return fallbackResult;
   }
 }
+
+// ============================================================
+// ENTERPRISE REGISTRATION
+// ============================================================
 
 EnterpriseAgentRegistry.registerAgent(
   {
