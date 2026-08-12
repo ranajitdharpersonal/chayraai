@@ -1,5 +1,8 @@
 import { GoogleGenAI } from '@google/genai';
 import { AgentRegistryStore } from './registry-store';
+import {
+  startAgentRegistryHeartbeat,
+} from './registry-heartbeat';
 
 // ============================================================
 // CHAYRA AI 3.0 — CENTRAL GOOGLE GEN AI CONFIGURATION
@@ -138,6 +141,8 @@ export interface AgentMetadata {
     | 'TIER_2'
     | 'TIER_3';
 }
+
+startAgentRegistryHeartbeat();
 
 export class EnterpriseAgentRegistry {
   private static agents: Map<
