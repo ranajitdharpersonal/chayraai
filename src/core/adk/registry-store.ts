@@ -11,21 +11,47 @@ import {
 
 import type { AgentMetadata } from './registry';
 
+const projectId =
+  process.env.GOOGLE_CLOUD_PROJECT_ID ||
+  process.env.GOOGLE_CLOUD_PROJECT;
+
+const clientEmail =
+  process.env.GOOGLE_CLIENT_EMAIL;
+
+const privateKey =
+  process.env.GOOGLE_PRIVATE_KEY?.replace(
+    /\\n/g,
+    '\n'
+  );
+
+if (!projectId) {
+  throw new Error(
+    '[Agent Registry]: Missing GOOGLE_CLOUD_PROJECT_ID.'
+  );
+}
+
+if (!clientEmail) {
+  throw new Error(
+    '[Agent Registry]: Missing GOOGLE_CLIENT_EMAIL.'
+  );
+}
+
+if (!privateKey) {
+  throw new Error(
+    '[Agent Registry]: Missing GOOGLE_PRIVATE_KEY.'
+  );
+}
+
+// ============================================================
+// FIREBASE / FIRESTORE INITIALIZATION
+// ============================================================
+
 if (!getApps().length) {
   initializeApp({
     credential: cert({
-      projectId:
-        process.env.GOOGLE_CLOUD_PROJECT_ID ||
-        process.env.GOOGLE_CLOUD_PROJECT,
-
-      clientEmail:
-        process.env.GOOGLE_CLIENT_EMAIL,
-
-      privateKey:
-        process.env.GOOGLE_PRIVATE_KEY?.replace(
-          /\\n/g,
-          '\n'
-        ),
+      projectId,
+      clientEmail,
+      privateKey,
     }),
   });
 }
@@ -35,11 +61,46 @@ const db = getFirestore();
 const REGISTRY_COLLECTION =
   'chayra_enterprise_agent_registry';
 
+// ============================================================
+// ENTERPRISE AGENT HEALTH TYPES
+// ============================================================
+
+export type AgentHealthStatus =
+  | 'HEALTHY'
+  | 'STALE'
+  | 'OFFLINE';
+
+export interface AgentFleetHealth {
+  name: string;
+  version: string;
+  role: string;
+
+  status:
+    | 'ACTIVE'
+    | 'STANDBY'
+    | 'DEPRECATED';
+
+  clearanceLevel:
+    | 'TIER_1'
+    | 'TIER_2'
+    | 'TIER_3';
+
+  health: AgentHealthStatus;
+
+  lastHeartbeat: string | null;
+}
+
+// ============================================================
+// ENTERPRISE AGENT REGISTRY STORE
+// ============================================================
+
 export class AgentRegistryStore {
   /**
    * Persist an agent's enterprise identity and lifecycle metadata.
    *
-   * The actual executable handler never goes into Firestore.
+   * IMPORTANT:
+   * The executable handler is NEVER stored in Firestore.
+   * Only durable metadata is persisted.
    */
   static async registerAgent(
     metadata: AgentMetadata
@@ -73,11 +134,11 @@ export class AgentRegistryStore {
 
       console.log(
         `[Agent Registry]: Persisted ${metadata.name} ` +
-        `(v${metadata.version}) to Firestore.`
+          `(v${metadata.version}) to Firestore.`
       );
     } catch (error) {
-      // Registry persistence should not prevent a local
-      // emergency request from executing.
+      // Registry persistence must never prevent the
+      // emergency runtime from executing.
       console.error(
         `[Agent Registry]: Failed to persist ${metadata.name}.`,
         error
@@ -86,7 +147,7 @@ export class AgentRegistryStore {
   }
 
   /**
-   * Update the last heartbeat of a registered agent.
+   * Update the last heartbeat timestamp for an agent.
    */
   static async heartbeat(
     agentName: string
@@ -113,7 +174,7 @@ export class AgentRegistryStore {
   }
 
   /**
-   * Discover the durable enterprise fleet catalog.
+   * Discover the complete durable enterprise agent catalog.
    */
   static async listPersistedAgents(): Promise<
     AgentMetadata[]
@@ -138,7 +199,7 @@ export class AgentRegistryStore {
   }
 
   /**
-   * Read one persisted agent record.
+   * Read one persisted agent record by name.
    */
   static async getPersistedAgent(
     agentName: string
@@ -161,6 +222,102 @@ export class AgentRegistryStore {
       );
 
       return null;
+    }
+  }
+
+  /**
+   * Evaluate the health of every registered enterprise agent.
+   *
+   * Heartbeat policy:
+   *
+   * < 10 minutes   → HEALTHY
+   * 10–30 minutes  → STALE
+   * > 30 minutes   → OFFLINE
+   */
+  static async getFleetHealth(): Promise<
+    AgentFleetHealth[]
+  > {
+    try {
+      const snapshot = await db
+        .collection(REGISTRY_COLLECTION)
+        .get();
+
+      const now = Date.now();
+
+      return snapshot.docs.map((doc) => {
+        const data = doc.data();
+
+        const heartbeatTimestamp =
+          data.lastHeartbeat;
+
+        let lastHeartbeat:
+          | string
+          | null = null;
+
+        if (
+          heartbeatTimestamp &&
+          typeof heartbeatTimestamp.toDate ===
+            'function'
+        ) {
+          lastHeartbeat =
+            heartbeatTimestamp
+              .toDate()
+              .toISOString();
+        }
+
+        let health:
+          | AgentHealthStatus = 'OFFLINE';
+
+        if (lastHeartbeat) {
+          const elapsedMs =
+            now -
+            new Date(lastHeartbeat).getTime();
+
+          const elapsedMinutes =
+            elapsedMs / (1000 * 60);
+
+          if (elapsedMinutes < 10) {
+            health = 'HEALTHY';
+          } else if (elapsedMinutes <= 30) {
+            health = 'STALE';
+          } else {
+            health = 'OFFLINE';
+          }
+        }
+
+        return {
+          name:
+            data.name ??
+            doc.id,
+
+          version:
+            data.version ??
+            'UNKNOWN',
+
+          role:
+            data.role ??
+            'UNKNOWN',
+
+          status:
+            data.status ??
+            'STANDBY',
+
+          clearanceLevel:
+            data.clearanceLevel ??
+            'TIER_3',
+
+          health,
+
+          lastHeartbeat,
+        };
+      });
+    } catch (error) {
+      console.error(
+        '[Agent Registry]: Fleet health evaluation failed.',
+        error
+      );
+
+      return [];
     }
   }
 }
