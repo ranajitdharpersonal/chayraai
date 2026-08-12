@@ -7,13 +7,17 @@ import {
   PredictiveMemoryBank,
 } from '../adk/memory';
 
+// ============================================================
+// GEMINI 3.5 FLASH
+// ============================================================
+
 const generativeModel =
   vertexAI.getGenerativeModel({
     model: 'gemini-3.5-flash',
   });
 
 // ============================================================
-// PUBLIC HEALTH DATA TYPES
+// TYPES
 // ============================================================
 
 interface OfficialAlert {
@@ -55,6 +59,7 @@ interface PublicHealthResult {
   metadata: {
     analysisTimestamp: string;
     source: string;
+
     sourceStatus:
       | 'AVAILABLE'
       | 'NO_CURRENT_RECORDS'
@@ -63,6 +68,7 @@ interface PublicHealthResult {
 
     verificationPolicy: string;
     forecastWindow: string;
+    lookbackDays: number;
   };
 }
 
@@ -98,6 +104,20 @@ function isValidZone(
   );
 }
 
+function cleanText(
+  value: unknown,
+  fallback = ''
+): string {
+  if (
+    typeof value === 'string' &&
+    value.trim()
+  ) {
+    return value.trim();
+  }
+
+  return fallback;
+}
+
 // ============================================================
 // PUBLIC HEALTH AGENT
 // ============================================================
@@ -105,43 +125,141 @@ function isValidZone(
 async function runPublicHealth(
   data: { location?: string }
 ): Promise<PublicHealthResult> {
+
   console.log(
-    '[Public Health]: Fetching trusted epidemic intelligence...'
+    '[Public Health]: Scanning the last 15 days of trusted health intelligence...'
   );
 
-  let officialAlerts: OfficialAlert[] = [];
+  const analysisDate =
+    new Date().toISOString();
+
+  const LOOKBACK_DAYS = 15;
+
+  let officialAlerts:
+    OfficialAlert[] = [];
 
   try {
+
     // ========================================================
-    // 1. FETCH CURRENT REAL-WORLD HEALTH INTELLIGENCE
+    // 1. EXPLICIT 15-DAY WINDOW
     // ========================================================
+
+    const now =
+      new Date();
+
+    const fromDate =
+      new Date(
+        now.getTime() -
+          LOOKBACK_DAYS *
+            24 *
+            60 *
+            60 *
+            1000
+      );
+
+    // ========================================================
+    // 2. RELIEFWEB REPORTS API
+    // ========================================================
+    //
+    // Reports are better suited than the disaster metadata
+    // endpoint for answering:
+    //
+    // "What disease/outbreak has actually been reported?"
+    //
+    // ReliefWeb supports date.created range filters and
+    // text queries on report content.
+    //
 
     const controller =
       new AbortController();
 
-    const timeout = setTimeout(
-      () => controller.abort(),
-      15_000
-    );
+    const timeout =
+      setTimeout(
+        () => controller.abort(),
+        15_000
+      );
 
     try {
-      const url =
-        'https://api.reliefweb.int/v1/disasters' +
-        '?appname=chayra-ai' +
-        '&profile=list' +
-        '&preset=latest' +
-        '&query[value]=epidemic' +
-        '&limit=15';
 
-      const response = await fetch(
-        url,
-        {
-          signal: controller.signal,
-          headers: {
-            Accept: 'application/json',
-          },
-        }
-      );
+      const appName =
+        process.env.RELIEFWEB_APPNAME ||
+        'chayra-ai';
+
+      const endpoint =
+        `https://api.reliefweb.int/v2/reports?appname=${encodeURIComponent(
+          appName
+        )}`;
+
+      const response =
+        await fetch(
+          endpoint,
+          {
+            method: 'POST',
+
+            signal:
+              controller.signal,
+
+            headers: {
+              'Content-Type':
+                'application/json',
+
+              Accept:
+                'application/json',
+            },
+
+            body: JSON.stringify({
+              limit: 20,
+
+              preset:
+                'latest',
+
+              query: {
+                value:
+                  'epidemic outbreak disease',
+                fields: [
+                  'title',
+                  'body',
+                  'disaster.name',
+                  'disaster_type.name',
+                  'theme.name',
+                ],
+                operator:
+                  'OR',
+              },
+
+              filter: {
+                field:
+                  'date.created',
+
+                value: {
+                  from:
+                    fromDate.toISOString(),
+
+                  to:
+                    now.toISOString(),
+                },
+              },
+
+              sort: [
+                'date.created:desc',
+              ],
+
+              fields: {
+                include: [
+                  'title',
+                  'body',
+                  'url',
+                  'date.created',
+                  'source',
+                  'primary_country',
+                  'disaster',
+                  'disaster_type',
+                  'theme',
+                ],
+              },
+            }),
+          }
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -152,72 +270,104 @@ async function runPublicHealth(
       const apiData =
         await response.json();
 
-      const rawAlerts =
-        Array.isArray(apiData?.data)
+      const rawReports =
+        Array.isArray(
+          apiData?.data
+        )
           ? apiData.data
           : [];
 
+      // ======================================================
+      // 3. NORMALIZE ONLY REAL API RECORDS
+      // ======================================================
+
       officialAlerts =
-        rawAlerts.map(
-          (item: any): OfficialAlert => ({
-            id: String(
-              item?.id ?? 'unknown'
-            ),
+        rawReports
+          .map(
+            (item: any) => {
 
-            name: String(
-              item?.fields?.name ??
-                'Unspecified outbreak'
-            ),
+              const fields =
+                item?.fields || {};
 
-            url: String(
-              item?.href ??
-                'https://reliefweb.int/'
-            ),
+              const title =
+                cleanText(
+                  fields.title,
+                  'Public health report'
+                );
 
-            source: 'UN ReliefWeb',
+              const created =
+                normalizeDate(
+                  fields?.date?.created
+                );
 
-            date: normalizeDate(
-              item?.fields?.date?.created
-            ),
+              return {
+                id:
+                  String(
+                    item?.id ??
+                      `${title}-${created}`
+                  ),
 
-            verified: true,
-          })
-        );
+                name:
+                  title,
+
+                url:
+                  String(
+                    fields.url ??
+                      item?.href ??
+                      'https://reliefweb.int/'
+                  ),
+
+                source:
+                  cleanText(
+                    fields?.source?.name ??
+                      fields?.source?.shortname,
+                    'UN ReliefWeb'
+                  ),
+
+                date:
+                  created,
+
+                verified:
+                  true as const,
+              };
+            }
+          );
+
     } finally {
       clearTimeout(timeout);
     }
 
-    // ========================================================
-    // 2. CURRENT DATE
-    // ========================================================
-
-    const analysisDate =
-      new Date().toISOString();
+    console.log(
+      `[Public Health]: ${officialAlerts.length} official report(s) found in the last ${LOOKBACK_DAYS} days.`
+    );
 
     // ========================================================
-    // 3. LOAD HISTORICAL PUBLIC HEALTH MEMORY
+    // 4. HISTORICAL HEALTH MEMORY
     // ========================================================
 
     const previousHealthState =
-      await PredictiveMemoryBank.getPublicHealthState();
+      await PredictiveMemoryBank
+        .getPublicHealthState();
 
-    // Keep the historical context bounded so we do not
-    // unnecessarily increase Gemini input tokens.
     const historicalContext =
       previousHealthState
         ? JSON.stringify({
             analysisTimestamp:
-              previousHealthState.analysisTimestamp,
+              previousHealthState
+                .analysisTimestamp,
 
             sourceStatus:
-              previousHealthState.sourceStatus,
+              previousHealthState
+                .sourceStatus,
 
             healthAdvisory:
-              previousHealthState.healthAdvisory,
+              previousHealthState
+                .healthAdvisory,
 
             officialAlerts:
               Array.isArray(
-                previousHealthState.officialAlerts
+                previousHealthState
+                  .officialAlerts
               )
                 ? previousHealthState
                     .officialAlerts
@@ -226,73 +376,102 @@ async function runPublicHealth(
 
             outbreakReports:
               Array.isArray(
-                previousHealthState.outbreakReports
+                previousHealthState
+                  .outbreakReports
               )
                 ? previousHealthState
                     .outbreakReports
                     .slice(-10)
                 : [],
           })
-        : 'No previous public-health state available.';
+        : 'No previous public-health memory available.';
 
     // ========================================================
-    // 4. PUBLIC HEALTH INTELLIGENCE PROMPT
+    // 5. GEMINI HEALTH INTELLIGENCE
     // ========================================================
 
     const prompt = `
-You are the Public Health Intelligence Agent for
-the ChayRa Enterprise Crisis Fleet.
+You are the Public Health Intelligence Agent
+for the ChayRa Enterprise Crisis Fleet.
 
-Current analysis timestamp:
+Current timestamp:
 ${analysisDate}
 
-User location context:
+Analysis window:
+LAST ${LOOKBACK_DAYS} DAYS
+
+User location:
 ${data.location || 'Not provided'}
 
-CURRENT OFFICIAL SOURCE RECORDS:
+OFFICIAL RELIEFWEB REPORTS:
 ${JSON.stringify(officialAlerts)}
 
-PREVIOUS PUBLIC HEALTH MEMORY:
+PREVIOUS HEALTH MEMORY:
 ${historicalContext}
 
-Rules:
+IMPORTANT RULES:
 
-1. Treat ONLY supplied official records as verified facts.
-2. Never invent an outbreak, source, publication date,
-   case count, or official confirmation.
-3. Historical context may be used to identify trends,
-   but it does not become a verified current alert.
-4. Predictions about vulnerable regions are MODEL INFERENCE.
-5. Clearly distinguish official evidence from inference.
-6. If evidence is insufficient, explicitly say so.
-7. Never convert uncertainty into an emergency claim.
-8. Never invent official dates or source names.
-9. Keep the advisory concise and operational.
-10. Use approximate country-center coordinates only when
-    reasonably inferable.
+1. Treat ONLY the supplied ReliefWeb records
+   as verified source evidence.
 
-Task 1:
-Summarize meaningful public-health trends visible in
-the current and historical records.
+2. Never invent an outbreak, disease,
+   publication date, source, case count,
+   or official confirmation.
 
-Task 2:
-Identify possible vulnerable neighboring regions for
-the next 15 days ONLY as model inference.
+3. If no relevant official report exists,
+   say clearly that no verified outbreak
+   was found in the selected ${LOOKBACK_DAYS}-day window.
 
-Task 3:
-Return exact source/date information for verified records.
+4. Historical memory can reveal trends,
+   but historical memory is NOT proof of a
+   new current outbreak.
+
+5. A vulnerable-zone prediction is
+   MODEL INFERENCE only.
+
+6. Never present model inference as an
+   official warning.
+
+7. Never convert uncertainty into an
+   emergency classification.
+
+8. Keep the final advisory concise.
+
+9. Do not manufacture coordinates when
+   a reasonable location cannot be inferred.
+
+10. The source/date in an outbreak report
+    must correspond to a supplied official
+    record whenever possible.
+
+TASK 1:
+Identify meaningful disease/outbreak signals
+reported within the last ${LOOKBACK_DAYS} days.
+
+TASK 2:
+Summarize the recent trend using only
+the supplied records and historical context.
+
+TASK 3:
+Predict potentially vulnerable neighboring
+regions for the NEXT 15 DAYS.
+Clearly label this as MODEL INFERENCE.
+
+TASK 4:
+Return exact source/date information for
+each verified report.
 
 Return ONLY valid JSON:
 
 {
-  "advisoryText": "2-3 concise sentences.",
+  "advisoryText": "2-3 concise sentences",
   "outbreakReports": [
     {
       "title": "string",
-      "description": "summary based only on available evidence",
-      "spreadForecast": "clearly labeled model inference",
-      "source": "UN ReliefWeb",
-      "date": "exact date from supplied official record",
+      "description": "official evidence summary",
+      "spreadForecast": "MODEL INFERENCE: ...",
+      "source": "exact supplied source",
+      "date": "exact supplied report date",
       "activeZone": {
         "isoCode": "ISO-3166 alpha-3",
         "lat": 0,
@@ -311,30 +490,51 @@ Return ONLY valid JSON:
 `;
 
     // ========================================================
-    // 5. GEMINI ANALYSIS
+    // 6. GEMINI CALL
     // ========================================================
 
     const resp =
-      await generativeModel.generateContent(
-        prompt
-      );
+      await generativeModel
+        .generateContent(
+          prompt
+        );
 
     const text =
-      resp.response.candidates?.[0]
-        ?.content?.parts?.[0]
-        ?.text || '{}';
+      resp.response
+        .candidates?.[0]
+        ?.content
+        ?.parts?.[0]
+        ?.text ||
+      '{}';
 
     const cleanJson =
       text
-        .replace(/```json/g, '')
-        .replace(/```/g, '')
+        .replace(
+          /```json/g,
+          ''
+        )
+        .replace(
+          /```/g,
+          ''
+        )
         .trim();
 
-    const result =
-      JSON.parse(cleanJson);
+    let result:
+      any = {};
+
+    try {
+      result =
+        JSON.parse(
+          cleanJson
+        );
+    } catch {
+      console.warn(
+        '[Public Health]: Gemini returned malformed JSON.'
+      );
+    }
 
     // ========================================================
-    // 6. HARDEN MODEL OUTPUT
+    // 7. HARDEN MODEL OUTPUT
     // ========================================================
 
     const rawReports =
@@ -350,31 +550,35 @@ Return ONLY valid JSON:
           .filter(
             (report: any) =>
               report &&
-              typeof report.title === 'string' &&
+              typeof report.title ===
+                'string' &&
               isValidZone(
                 report.activeZone
               )
           )
           .map(
             (report: any) => ({
+
               title:
                 report.title,
 
               description:
-                String(
-                  report.description ??
-                    'No detailed description available.'
+                cleanText(
+                  report.description,
+                  'No detailed description available.'
                 ),
 
               spreadForecast:
-                String(
-                  report.spreadForecast ??
-                    'Insufficient evidence for a reliable forecast.'
+                cleanText(
+                  report.spreadForecast,
+                  'MODEL INFERENCE: Insufficient evidence for a reliable forecast.'
                 ),
 
-              // Model output never determines provenance.
               source:
-                'UN ReliefWeb',
+                cleanText(
+                  report.source,
+                  'UN ReliefWeb'
+                ),
 
               date:
                 normalizeDate(
@@ -391,7 +595,8 @@ Return ONLY valid JSON:
                 Array.isArray(
                   report.vulnerableZones
                 )
-                  ? report.vulnerableZones
+                  ? report
+                      .vulnerableZones
                       .filter(
                         isValidZone
                       )
@@ -400,19 +605,21 @@ Return ONLY valid JSON:
           );
 
     // ========================================================
-    // 7. BUILD FINAL RESULT
+    // 8. FINAL HEALTH RESULT
     // ========================================================
 
     const finalResult:
       PublicHealthResult = {
+
       healthAdvisory:
         typeof result?.advisoryText ===
         'string'
           ? result.advisoryText
           : (
-              officialAlerts.length > 0
-                ? 'Current public-health signals are under active analysis.'
-                : 'No verified public-health alert was available from the current source.'
+              officialAlerts.length >
+              0
+                ? `Found ${officialAlerts.length} verified public-health report(s) from the last ${LOOKBACK_DAYS} days.`
+                : `No verified disease/outbreak report was found in the last ${LOOKBACK_DAYS} days from the current trusted source.`
             ),
 
       outbreakReports,
@@ -427,7 +634,8 @@ Return ONLY valid JSON:
           'UN ReliefWeb',
 
         sourceStatus:
-          officialAlerts.length > 0
+          officialAlerts.length >
+          0
             ? 'AVAILABLE'
             : 'NO_CURRENT_RECORDS',
 
@@ -436,33 +644,39 @@ Return ONLY valid JSON:
 
         forecastWindow:
           '15 days',
+
+        lookbackDays:
+          LOOKBACK_DAYS,
       },
     };
 
     // ========================================================
-    // 8. PERSIST PUBLIC HEALTH MEMORY
+    // 9. PERSIST HEALTH MEMORY
     // ========================================================
 
-    await PredictiveMemoryBank.savePublicHealthState(
-      finalResult
-    );
+    await PredictiveMemoryBank
+      .savePublicHealthState(
+        finalResult
+      );
 
     return finalResult;
 
   } catch (error) {
+
     console.error(
       '[Public Health]: Intelligence pipeline failed.',
       error
     );
 
     // ========================================================
-    // 9. SAFE FALLBACK
+    // 10. SAFE FALLBACK
     // ========================================================
 
     const fallbackResult:
       PublicHealthResult = {
+
       healthAdvisory:
-        'Public-health intelligence is temporarily unavailable. No new verified alert could be confirmed from the current source.',
+        `Public-health intelligence is temporarily unavailable. No new verified outbreak could be confirmed in the last ${LOOKBACK_DAYS} days.`,
 
       outbreakReports: [],
 
@@ -476,7 +690,8 @@ Return ONLY valid JSON:
           'UN ReliefWeb',
 
         sourceStatus:
-          officialAlerts.length > 0
+          officialAlerts.length >
+          0
             ? 'PARTIAL'
             : 'UNAVAILABLE',
 
@@ -485,12 +700,16 @@ Return ONLY valid JSON:
 
         forecastWindow:
           '15 days',
+
+        lookbackDays:
+          LOOKBACK_DAYS,
       },
     };
 
-    await PredictiveMemoryBank.savePublicHealthState(
-      fallbackResult
-    );
+    await PredictiveMemoryBank
+      .savePublicHealthState(
+        fallbackResult
+      );
 
     return fallbackResult;
   }
