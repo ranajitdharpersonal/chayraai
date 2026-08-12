@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { AgentRegistryStore } from './registry-store';
 
 // ============================================================
 // CHAYRA AI 3.0 — CENTRAL GOOGLE GEN AI CONFIGURATION
@@ -152,20 +153,27 @@ export class EnterpriseAgentRegistry {
   // ==========================================================
 
   static registerAgent(
-    metadata: AgentMetadata,
-    handler: Function
-  ) {
-    console.log(
-      `[Enterprise Registry]: Securing Identity for Agent -> ` +
-        `${metadata.name} (v${metadata.version}) | ` +
-        `Clearance: ${metadata.clearanceLevel}`
-    );
+  metadata: AgentMetadata,
+  handler: Function
+) {
+  console.log(
+    `[Enterprise Registry]: Securing Identity for Agent -> ` +
+      `${metadata.name} (v${metadata.version}) | ` +
+      `Clearance: ${metadata.clearanceLevel}`
+  );
 
-    this.agents.set(metadata.name, {
-      handler,
-      metadata,
-    });
-  }
+  this.agents.set(metadata.name, {
+    handler,
+    metadata,
+  });
+
+  // Persist the enterprise catalog asynchronously.
+  // Local registration remains synchronous so existing
+  // agent imports and runtime execution are not blocked.
+  void AgentRegistryStore.registerAgent(
+    metadata
+  );
+}
 
   // ==========================================================
   // 2. AGENT GATEWAY + OBSERVABILITY
