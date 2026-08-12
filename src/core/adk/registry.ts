@@ -1,21 +1,47 @@
-import { VertexAI } from '@google-cloud/vertexai';
+// 🛑 NEW: The official Gen AI SDK for 3.5+ Models
+import { GoogleGenAI } from '@google/genai';
 
-// 1. Enterprise Explicit Credentials (Fixing the Auth Crash for Vertex)
-// Update: Using GOOGLE_CLOUD_PROJECT_ID to match your .env file
 const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || 'demo-chayra-ai-local';
 const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
 
-export const vertexAI = new VertexAI({ 
-  project: projectId, 
-  location: location,
-  // 🛑 The Magic Fix: Injecting explicit auth so the AI doesn't get denied access
-  googleAuthOptions: {
-    credentials: {
-      client_email: process.env.GOOGLE_CLIENT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    }
+// 1. Initialize the new unified SDK (🛑 THE EXACT FIX IS HERE)
+const ai = new GoogleGenAI({ 
+  vertexai: true,         // <-- Eta ekhon boolean hobe
+  project: projectId,     // <-- Ekdom top level-e
+  location: location,     // <-- Ekdom top level-e
+  // Explicit credentials jate auth theek moto set hoy
+  credentials: {
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
   }
-});
+} as any);
+
+// 🛑 MASTERSTROKE WRAPPER: 
+export const vertexAI = {
+  getGenerativeModel: ({ model }: { model: string }) => {
+    return {
+      generateContent: async (prompt: string) => {
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: prompt,
+        });
+        
+        // Pushing back the response in the exact format your existing agents expect
+        return {
+          response: {
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: response.text }]
+                }
+              }
+            ]
+          }
+        };
+      }
+    };
+  }
+};
 
 export interface AgentMetadata {
   name: string;
