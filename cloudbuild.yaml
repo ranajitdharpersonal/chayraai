@@ -31,6 +31,8 @@ steps:
       - '--region'
       - 'us-central1'
       - '--allow-unauthenticated'
+      - '--service-account'
+      - 'chayra-ai-core@daring-chess-470414-g1.iam.gserviceaccount.com'
       - '--update-env-vars'
       - 'GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=asia-south1,MODEL_ARMOR_LOCATION=us-central1,MODEL_ARMOR_TEMPLATE_ID=default'
 
@@ -48,6 +50,8 @@ steps:
       - '--region'
       - 'us-central1'
       - '--no-allow-unauthenticated'
+      - '--service-account'
+      - 'chayra-ai-core@daring-chess-470414-g1.iam.gserviceaccount.com'
       - '--update-env-vars'
       - 'GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=asia-south1,MODEL_ARMOR_LOCATION=us-central1,MODEL_ARMOR_TEMPLATE_ID=default'
       - '--min-instances'
