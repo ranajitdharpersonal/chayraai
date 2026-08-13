@@ -58,13 +58,6 @@ export async function POST(req: Request) {
     // ----------------------------------------------------------
     // 2. CREATE ADK SESSION
     // ----------------------------------------------------------
-    //
-    // State is available to every ChayRa adapter through
-    // InvocationContext.session.state.
-    //
-    // Navigator needs user coordinates.
-    // Other agents can access shared context here as needed.
-    //
 
     await runner.sessionService.createSession({
       appName: APP_NAME,
@@ -187,29 +180,73 @@ export async function POST(req: Request) {
     );
 
     // ----------------------------------------------------------
-    // 8. RETURN THE SAME API CONTRACT USED BY THE UI
+    // 8. PREDICTIVE RESILIENCE MEMORY
+    //
+    // Only spend an additional Gemini call for a meaningful
+    // high/critical threat. This keeps normal requests cheaper.
+    // ----------------------------------------------------------
+
+    let resiliencePrediction =
+      'Resilience engine standing by.';
+
+    const threatLevel =
+      String(
+        scavengerResult.threatLevel ?? 'UNKNOWN'
+      ).toUpperCase();
+
+    if (
+      threatLevel === 'HIGH' ||
+      threatLevel === 'CRITICAL'
+    ) {
+      resiliencePrediction =
+        await PredictiveMemoryBank
+          .predictThreatEvolution(
+            activeSessionId
+          );
+    }
+
+    // ----------------------------------------------------------
+    // 9. RETURN THE API CONTRACT USED BY THE UI
     // ----------------------------------------------------------
 
     return NextResponse.json({
-  type: 'success',
-  sessionId: activeSessionId,
-  threatLevel: scavengerResult.threatLevel,
-  radarIntel,
-  medical: medicalData,
+      type: 'success',
+      sessionId: activeSessionId,
 
-  // Keep the full Navigator result
-  navigation: navigationData,
+      threatLevel:
+        scavengerResult.threatLevel,
 
-  // Expose coordinates directly for the map layer
-  destCoords: navigationData?.destCoords ?? null,
+      radarIntel,
 
-  // Optional convenience flag for the UI
-  isRealData: navigationData?.isRealData ?? false,
+      medical:
+        medicalData,
 
-  evidence: evidencePanel,
-  healthAdvisory: healthData?.healthAdvisory,
-  outbreakReports: healthData?.outbreakReports,
-});
+      // Keep the full Navigator result.
+      navigation:
+        navigationData,
+
+      // Expose coordinates directly for map consumers.
+      destCoords:
+        navigationData?.destCoords ??
+        null,
+
+      // Optional convenience flag for the UI.
+      isRealData:
+        navigationData?.isRealData ??
+        false,
+
+      evidence:
+        evidencePanel,
+
+      healthAdvisory:
+        healthData?.healthAdvisory,
+
+      outbreakReports:
+        healthData?.outbreakReports,
+
+      // Resilience / Predictive Memory.
+      resiliencePrediction,
+    });
 
   } catch (error: any) {
     console.error(
