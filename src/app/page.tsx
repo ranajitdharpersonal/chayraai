@@ -61,8 +61,8 @@ export default function Home() {
             top-[76px]
             left-2
             right-2
-            h-[42vh]
-            max-h-[340px]
+            h-[38vh]
+            max-h-[300px]
             overflow-y-auto
             overscroll-contain
             scrollbar-hide
