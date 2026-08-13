@@ -268,6 +268,7 @@ export class ChayRaCrisisFleet extends BaseAgent {
     // ----------------------------------------------------------
 
     const parallelTasks: Promise<void>[] = [];
+    const parallelEvents: Event[] = [];
 
     if (requiredAgents.includes('Medical')) {
       parallelTasks.push(
@@ -277,31 +278,21 @@ export class ChayRaCrisisFleet extends BaseAgent {
           );
 
           for await (const event of this.medical.runAsync(ctx)) {
-            // ADK events from child agents are intentionally
-            // forwarded after the parallel group finishes.
-            void event;
+            parallelEvents.push(event);
           }
         })(),
       );
     }
 
-    // Navigator is mandatory whenever we have real user coordinates.
-    // This prevents the Scavenger model from accidentally suppressing
-    // verified hospital / shelter / bunker discovery.
-    if (
-      requiredAgents.includes('Navigator') ||
-      state.userCoords
-    ) {
+    if (requiredAgents.includes('Navigator')) {
       parallelTasks.push(
         (async () => {
           console.log(
-            state.userCoords
-              ? '[ADK Runtime]: Parallel → Navigator (mandatory with coordinates)'
-              : '[ADK Runtime]: Parallel → Navigator'
+            '[ADK Runtime]: Parallel → Navigator'
           );
 
           for await (const event of this.navigator.runAsync(ctx)) {
-            void event;
+            parallelEvents.push(event);
           }
         })(),
       );
@@ -316,12 +307,21 @@ export class ChayRaCrisisFleet extends BaseAgent {
         );
 
         for await (const event of this.publicHealth.runAsync(ctx)) {
-          void event;
+          parallelEvents.push(event);
         }
       })(),
     );
 
     await Promise.all(parallelTasks);
+
+    // The tactical agents run concurrently, but their structured
+    // ADK events must still be forwarded to the root runner.
+    // Without this, route.ts cannot capture Navigator_result
+    // from the ADK event stream even though Navigator successfully
+    // found a real hospital/shelter/bunker.
+    for (const event of parallelEvents) {
+      yield event;
+    }
 
     // ----------------------------------------------------------
     // 5. VERIFIER
