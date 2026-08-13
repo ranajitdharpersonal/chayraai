@@ -74,7 +74,7 @@ export default function ActionPanel() {
     setIsHealthLoading(true);
 
     try {
-      const res = await fetch('/api/public-health', {
+      const res = await fetch('/api/public-health?refresh=1', {
         method: 'GET',
         cache: 'no-store',
       });

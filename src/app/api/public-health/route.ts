@@ -11,10 +11,25 @@ import {
 // Ensure the PublicHealth handler registers itself.
 import '@/core/agents/publicHealth';
 
+// Public Health is intentionally cached for the background/normal UI path,
+// but the dedicated Health tab can request a live refresh explicitly with:
+// GET /api/public-health?refresh=1
 const CACHE_TTL_MS =
   24 * 60 * 60 * 1000;
 
-export async function GET() {
+export async function GET(
+  request: Request,
+) {
+  const url =
+    new URL(
+      request.url,
+    );
+
+  const forceRefresh =
+    url.searchParams.get(
+      'refresh',
+    ) === '1';
+
   try {
     const cached =
       await PredictiveMemoryBank
@@ -32,11 +47,15 @@ export async function GET() {
           ).getTime()
         : Number.POSITIVE_INFINITY;
 
-    // Use a recent verified snapshot without
-    // spending another model/source request.
+    // Preserve the existing low-cost cache behavior for
+    // normal requests. The Health tab can explicitly bypass
+    // this cache with ?refresh=1.
     if (
+      !forceRefresh &&
       cached &&
-      Number.isFinite(cachedAge) &&
+      Number.isFinite(
+        cachedAge,
+      ) &&
       cachedAge >= 0 &&
       cachedAge < CACHE_TTL_MS
     ) {
@@ -52,6 +71,14 @@ export async function GET() {
         .getAgent(
           'PublicHealth',
         );
+
+    console.log(
+      `[Public Health API]: ${
+        forceRefresh
+          ? 'Forcing live source refresh.'
+          : 'Refreshing stale public-health snapshot.'
+      }`,
+    );
 
     const result =
       await handler({
@@ -70,7 +97,7 @@ export async function GET() {
       error,
     );
 
-    // Last-known-good fallback.
+    // Preserve the existing last-known-good fallback.
     try {
       const cached =
         await PredictiveMemoryBank
