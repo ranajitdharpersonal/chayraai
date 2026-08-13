@@ -114,54 +114,159 @@ export default function MapCore() {
   }, []);
 
   useEffect(() => {
-    const handleTabChange = (event: any) => setActiveTab(event.detail);
+    const handleEnablePinDrop = () => {
+      setIsPinDropMode(true);
+    };
+
+    const handleTabChange = (event: any) => {
+      setActiveTab(event.detail);
+    };
+
+    const handleUpdateUserPin = (event: any) => {
+      if (event.detail) {
+        setUserPin(event.detail);
+      }
+    };
 
     const handleIntelUpdate = (event: any) => {
       const data = event.detail;
-      
-      // 🛑 REAL DATA SYNC: Extracting Active Zones, Vulnerable Zones, and Spread Paths!
-      if (data.outbreakReports && data.outbreakReports.length > 0) {
-          let actives: string[] = [];
-          let vulnerables: string[] = [];
-          let lines: any[] = [];
-          
-          data.outbreakReports.forEach((report: any) => {
-             if (report.activeZone) {
-                actives.push(report.activeZone.isoCode);
-                if (report.vulnerableZones) {
-                   report.vulnerableZones.forEach((vuln: any) => {
-                      vulnerables.push(vuln.isoCode);
-                      lines.push({ 
-                        from: [report.activeZone.lat, report.activeZone.lng], 
-                        to: [vuln.lat, vuln.lng] 
-                      });
-                   });
+
+      // 🛑 REAL DATA SYNC: Extracting Active Zones,
+      // Vulnerable Zones, and Spread Paths!
+      if (
+        Array.isArray(data.outbreakReports) &&
+        data.outbreakReports.length > 0
+      ) {
+        const actives: string[] = [];
+        const vulnerables: string[] = [];
+        const lines: {
+          from: [number, number];
+          to: [number, number];
+        }[] = [];
+
+        data.outbreakReports.forEach(
+          (report: any) => {
+            if (!report?.activeZone) {
+              return;
+            }
+
+            actives.push(
+              report.activeZone.isoCode
+            );
+
+            if (
+              Array.isArray(
+                report.vulnerableZones
+              )
+            ) {
+              report.vulnerableZones.forEach(
+                (vuln: any) => {
+                  if (
+                    typeof vuln?.lat !== 'number' ||
+                    typeof vuln?.lng !== 'number'
+                  ) {
+                    return;
+                  }
+
+                  vulnerables.push(
+                    vuln.isoCode
+                  );
+
+                  lines.push({
+                    from: [
+                      report.activeZone.lat,
+                      report.activeZone.lng,
+                    ],
+                    to: [
+                      vuln.lat,
+                      vuln.lng,
+                    ],
+                  });
                 }
-             }
-          });
-          setActiveIsoCodes(actives);
-          setVulnerableIsoCodes(vulnerables);
-          setSpreadLines(lines);
+              );
+            }
+          }
+        );
+
+        setActiveIsoCodes(actives);
+        setVulnerableIsoCodes(
+          vulnerables
+        );
+        setSpreadLines(lines);
+      } else {
+        // Clear stale health overlays when the latest
+        // swarm result contains no active outbreak data.
+        setActiveIsoCodes([]);
+        setVulnerableIsoCodes([]);
+        setSpreadLines([]);
       }
 
-      if (userPin && data.destCoords) {
-        setDestPin(data.destCoords); 
-        setEvacuationRoute([[userPin.lat, userPin.lng], [data.destCoords.lat, data.destCoords.lng]]);
+      if (
+        userPin &&
+        data.destCoords &&
+        typeof data.destCoords.lat === 'number' &&
+        typeof data.destCoords.lng === 'number'
+      ) {
+        setDestPin(data.destCoords);
+
+        // Current project intentionally keeps the
+        // straight-line visual fallback.
+        setEvacuationRoute([
+          [
+            userPin.lat,
+            userPin.lng,
+          ],
+          [
+            data.destCoords.lat,
+            data.destCoords.lng,
+          ],
+        ]);
       }
     };
 
-    window.addEventListener('ENABLE_PIN_DROP', () => setIsPinDropMode(true));
-    window.addEventListener('SWARM_INTEL_UPDATE', handleIntelUpdate);
-    window.addEventListener('UPDATE_USER_PIN', (event: any) => setUserPin(event.detail));
-    window.addEventListener('TAB_CHANGED', handleTabChange);
+    window.addEventListener(
+      'ENABLE_PIN_DROP',
+      handleEnablePinDrop
+    );
+
+    window.addEventListener(
+      'SWARM_INTEL_UPDATE',
+      handleIntelUpdate
+    );
+
+    window.addEventListener(
+      'UPDATE_USER_PIN',
+      handleUpdateUserPin
+    );
+
+    window.addEventListener(
+      'TAB_CHANGED',
+      handleTabChange
+    );
 
     return () => {
-      window.removeEventListener('ENABLE_PIN_DROP', () => setIsPinDropMode(true));
-      window.removeEventListener('SWARM_INTEL_UPDATE', handleIntelUpdate);
-      window.removeEventListener('UPDATE_USER_PIN', (event: any) => setUserPin(event.detail));
-      window.removeEventListener('TAB_CHANGED', handleTabChange);
+      window.removeEventListener(
+        'ENABLE_PIN_DROP',
+        handleEnablePinDrop
+      );
+
+      window.removeEventListener(
+        'SWARM_INTEL_UPDATE',
+        handleIntelUpdate
+      );
+
+      window.removeEventListener(
+        'UPDATE_USER_PIN',
+        handleUpdateUserPin
+      );
+
+      window.removeEventListener(
+        'TAB_CHANGED',
+        handleTabChange
+      );
     };
   }, [userPin]);
+
 
   const resetMap = () => {
     setUserPin(null);
