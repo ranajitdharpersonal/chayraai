@@ -1,12 +1,14 @@
 import {
   getApps,
   initializeApp,
+  getApp,
   cert,
 } from 'firebase-admin/app';
 
 import {
   getFirestore,
   FieldValue,
+  type Firestore,
 } from 'firebase-admin/firestore';
 
 import { vertexAI } from './registry';
@@ -20,43 +22,65 @@ const projectId =
   process.env.GOOGLE_CLOUD_PROJECT;
 
 const clientEmail =
-  process.env.GOOGLE_CLIENT_EMAIL;
+  process.env.GOOGLE_CLIENT_EMAIL?.trim();
 
 const privateKey =
   process.env.GOOGLE_PRIVATE_KEY?.replace(
     /\\n/g,
-    '\n'
+    '\n',
   );
 
-if (!projectId) {
-  throw new Error(
-    '[Memory Bank]: Missing GOOGLE_CLOUD_PROJECT_ID.'
+let dbInstance:
+  | Firestore
+  | null = null;
+
+/**
+ * Initialise Firestore lazily.
+ *
+ * Next.js may import this module while collecting route
+ * configuration during `next build`. Credentials are not
+ * guaranteed to exist inside the Docker build stage.
+ *
+ * We therefore do not initialise Firebase Admin or validate
+ * service-account credentials at module import time.
+ *
+ * Runtime:
+ * - explicit GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY -> cert()
+ * - otherwise -> Application Default Credentials (ADC)
+ */
+function getDb(): Firestore {
+  if (dbInstance) {
+    return dbInstance;
+  }
+
+  if (!projectId) {
+    throw new Error(
+      '[Memory Bank]: Missing Google Cloud project configuration.',
+    );
+  }
+
+  if (!getApps().length) {
+    if (clientEmail && privateKey) {
+      initializeApp({
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
+      });
+    } else {
+      initializeApp({
+        projectId,
+      });
+    }
+  }
+
+  dbInstance = getFirestore(
+    getApp(),
   );
-}
 
-if (!clientEmail) {
-  throw new Error(
-    '[Memory Bank]: Missing GOOGLE_CLIENT_EMAIL.'
-  );
+  return dbInstance;
 }
-
-if (!privateKey) {
-  throw new Error(
-    '[Memory Bank]: Missing GOOGLE_PRIVATE_KEY.'
-  );
-}
-
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId,
-      clientEmail,
-      privateKey,
-    }),
-  });
-}
-
-const db = getFirestore();
 
 // ============================================================
 // GEMINI 3.5 FLASH — PREDICTIVE MEMORY ENGINE
@@ -102,34 +126,40 @@ export interface PublicHealthMemoryState {
 // ============================================================
 
 export class PredictiveMemoryBank {
-
   // ==========================================================
   // 1. ENTERPRISE SESSION STATE
   // ==========================================================
 
   static async saveSituationState(
     sessionId: string,
-    data: any
+    data: any,
   ): Promise<void> {
     console.log(
-      `[Memory Bank]: Committing enterprise state to Firestore for session ${sessionId}...`
+      `[Memory Bank]: Committing enterprise state to Firestore for session ${sessionId}...`,
     );
 
     try {
+      const db = getDb();
+
       const docRef = db
-        .collection('chayra_enterprise_memory')
+        .collection(
+          'chayra_enterprise_memory',
+        )
         .doc(sessionId);
 
       await docRef.set(
         {
           situationContext:
-            data.lastInput || 'UNKNOWN',
+            data.lastInput ||
+            'UNKNOWN',
 
           threatLevel:
-            data.threatLevel || 'LOW',
+            data.threatLevel ||
+            'LOW',
 
           activeIntel:
-            data.intel || 'NONE',
+            data.intel ||
+            'NONE',
 
           systemVersion:
             '3.0.0',
@@ -158,17 +188,16 @@ export class PredictiveMemoryBank {
         },
         {
           merge: true,
-        }
+        },
       );
-
     } catch (error) {
       console.error(
         '[Memory Bank]: Critical DB Sync Failure.',
-        error
+        error,
       );
 
       throw new Error(
-        'Enterprise Database Connection Failed. Please verify GCP Service Account.'
+        'Enterprise Database Connection Failed. Please verify GCP Service Account.',
       );
     }
   }
@@ -178,15 +207,19 @@ export class PredictiveMemoryBank {
   // ==========================================================
 
   static async getSituationHistory(
-    sessionId: string
+    sessionId: string,
   ) {
     console.log(
-      `[Memory Bank]: Retrieving historical threat data for ${sessionId}...`
+      `[Memory Bank]: Retrieving historical threat data for ${sessionId}...`,
     );
 
     try {
+      const db = getDb();
+
       const docRef = db
-        .collection('chayra_enterprise_memory')
+        .collection(
+          'chayra_enterprise_memory',
+        )
         .doc(sessionId);
 
       const doc =
@@ -195,11 +228,10 @@ export class PredictiveMemoryBank {
       return doc.exists
         ? doc.data()
         : null;
-
     } catch (error) {
       console.error(
         '[Memory Bank]: Retrieval Failed.',
-        error
+        error,
       );
 
       return null;
@@ -211,19 +243,21 @@ export class PredictiveMemoryBank {
   // ==========================================================
 
   static async savePublicHealthState(
-    data: PublicHealthMemoryState
+    data: PublicHealthMemoryState,
   ): Promise<void> {
     console.log(
-      '[Memory Bank]: Persisting public-health intelligence...'
+      '[Memory Bank]: Persisting public-health intelligence...',
     );
 
     try {
+      const db = getDb();
+
       const docRef = db
         .collection(
-          'chayra_public_health_memory'
+          'chayra_public_health_memory',
         )
         .doc(
-          'global_health_watch'
+          'global_health_watch',
         );
 
       await docRef.set(
@@ -268,19 +302,16 @@ export class PredictiveMemoryBank {
         },
         {
           merge: true,
-        }
+        },
       );
 
       console.log(
-        '[Memory Bank]: Public-health intelligence persisted.'
+        '[Memory Bank]: Public-health intelligence persisted.',
       );
-
     } catch (error) {
-      // Health-memory persistence should not kill
-      // the live crisis-response pipeline.
       console.error(
         '[Memory Bank]: Public-health persistence failed.',
-        error
+        error,
       );
     }
   }
@@ -293,16 +324,18 @@ export class PredictiveMemoryBank {
     PublicHealthMemoryState | null
   > {
     console.log(
-      '[Memory Bank]: Retrieving historical public-health state...'
+      '[Memory Bank]: Retrieving historical public-health state...',
     );
 
     try {
+      const db = getDb();
+
       const docRef = db
         .collection(
-          'chayra_public_health_memory'
+          'chayra_public_health_memory',
         )
         .doc(
-          'global_health_watch'
+          'global_health_watch',
         );
 
       const doc =
@@ -316,11 +349,10 @@ export class PredictiveMemoryBank {
         doc.data() as
           PublicHealthMemoryState
       );
-
     } catch (error) {
       console.error(
         '[Memory Bank]: Public-health retrieval failed.',
-        error
+        error,
       );
 
       return null;
@@ -332,15 +364,15 @@ export class PredictiveMemoryBank {
   // ==========================================================
 
   static async predictThreatEvolution(
-    sessionId: string
+    sessionId: string,
   ): Promise<string> {
     console.log(
-      '[Memory Bank]: Analyzing historical state for prediction...'
+      '[Memory Bank]: Analyzing historical state for prediction...',
     );
 
     const history =
       await this.getSituationHistory(
-        sessionId
+        sessionId,
       );
 
     if (!history) {
@@ -363,7 +395,7 @@ ${JSON.stringify(history)}
 
       const resp =
         await generativeModel.generateContent(
-          prompt
+          prompt,
         );
 
       return (
@@ -373,11 +405,10 @@ ${JSON.stringify(history)}
           ?.text ||
         'Prediction engine is standing by.'
       );
-
     } catch (error) {
       console.error(
         '[Memory Bank]: Prediction generation failed.',
-        error
+        error,
       );
 
       return (
