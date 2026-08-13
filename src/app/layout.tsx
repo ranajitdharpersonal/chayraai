@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ChayRa AI | Enterprise Fleet",
+  title: "ChayRa AI",
   description: "When the World Breaks, ChayRa Responds. Powered by 3-Brain Swarm Intelligence. Engineered By Ranajit Dhar",
 };
 
