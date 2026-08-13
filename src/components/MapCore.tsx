@@ -40,10 +40,19 @@ const createSafeZoneIcon = () => {
   });
 };
 
-function MapController({ isPinDropMode, setIsPinDropMode, setUserPin, userPin }: any) {
+function MapController({ isPinDropMode, setIsPinDropMode, setUserPin, userPin, destPin }: any) {
   const map = useMap();
   useEffect(() => { map.getContainer().style.cursor = isPinDropMode ? 'crosshair' : 'grab'; }, [isPinDropMode, map]);
   useEffect(() => { if (userPin) map.flyTo([userPin.lat, userPin.lng], 13, { animate: true, duration: 2 }); }, [userPin, map]);
+  useEffect(() => {
+    if (destPin) {
+      map.flyTo(
+        [destPin.lat, destPin.lng],
+        14,
+        { animate: true, duration: 1.5 }
+      );
+    }
+  }, [destPin, map]);
   useMapEvents({
     click(e) {
       if (!isPinDropMode) return;
@@ -114,159 +123,67 @@ export default function MapCore() {
   }, []);
 
   useEffect(() => {
-    const handleEnablePinDrop = () => {
-      setIsPinDropMode(true);
-    };
-
-    const handleTabChange = (event: any) => {
-      setActiveTab(event.detail);
-    };
-
-    const handleUpdateUserPin = (event: any) => {
-      if (event.detail) {
-        setUserPin(event.detail);
-      }
-    };
+    const handleTabChange = (event: any) => setActiveTab(event.detail);
 
     const handleIntelUpdate = (event: any) => {
       const data = event.detail;
-
-      // 🛑 REAL DATA SYNC: Extracting Active Zones,
-      // Vulnerable Zones, and Spread Paths!
-      if (
-        Array.isArray(data.outbreakReports) &&
-        data.outbreakReports.length > 0
-      ) {
-        const actives: string[] = [];
-        const vulnerables: string[] = [];
-        const lines: {
-          from: [number, number];
-          to: [number, number];
-        }[] = [];
-
-        data.outbreakReports.forEach(
-          (report: any) => {
-            if (!report?.activeZone) {
-              return;
-            }
-
-            actives.push(
-              report.activeZone.isoCode
-            );
-
-            if (
-              Array.isArray(
-                report.vulnerableZones
-              )
-            ) {
-              report.vulnerableZones.forEach(
-                (vuln: any) => {
-                  if (
-                    typeof vuln?.lat !== 'number' ||
-                    typeof vuln?.lng !== 'number'
-                  ) {
-                    return;
-                  }
-
-                  vulnerables.push(
-                    vuln.isoCode
-                  );
-
-                  lines.push({
-                    from: [
-                      report.activeZone.lat,
-                      report.activeZone.lng,
-                    ],
-                    to: [
-                      vuln.lat,
-                      vuln.lng,
-                    ],
-                  });
+      
+      // 🛑 REAL DATA SYNC: Extracting Active Zones, Vulnerable Zones, and Spread Paths!
+      if (data.outbreakReports && data.outbreakReports.length > 0) {
+          let actives: string[] = [];
+          let vulnerables: string[] = [];
+          let lines: any[] = [];
+          
+          data.outbreakReports.forEach((report: any) => {
+             if (report.activeZone) {
+                actives.push(report.activeZone.isoCode);
+                if (report.vulnerableZones) {
+                   report.vulnerableZones.forEach((vuln: any) => {
+                      vulnerables.push(vuln.isoCode);
+                      lines.push({ 
+                        from: [report.activeZone.lat, report.activeZone.lng], 
+                        to: [vuln.lat, vuln.lng] 
+                      });
+                   });
                 }
-              );
-            }
-          }
-        );
-
-        setActiveIsoCodes(actives);
-        setVulnerableIsoCodes(
-          vulnerables
-        );
-        setSpreadLines(lines);
-      } else {
-        // Clear stale health overlays when the latest
-        // swarm result contains no active outbreak data.
-        setActiveIsoCodes([]);
-        setVulnerableIsoCodes([]);
-        setSpreadLines([]);
+             }
+          });
+          setActiveIsoCodes(actives);
+          setVulnerableIsoCodes(vulnerables);
+          setSpreadLines(lines);
       }
 
       if (
-        userPin &&
         data.destCoords &&
         typeof data.destCoords.lat === 'number' &&
         typeof data.destCoords.lng === 'number'
       ) {
         setDestPin(data.destCoords);
 
-        // Current project intentionally keeps the
-        // straight-line visual fallback.
-        setEvacuationRoute([
-          [
-            userPin.lat,
-            userPin.lng,
-          ],
-          [
-            data.destCoords.lat,
-            data.destCoords.lng,
-          ],
-        ]);
+        if (userPin) {
+          setEvacuationRoute([
+            [userPin.lat, userPin.lng],
+            [data.destCoords.lat, data.destCoords.lng],
+          ]);
+        }
+      } else {
+        setDestPin(null);
+        setEvacuationRoute(null);
       }
     };
 
-    window.addEventListener(
-      'ENABLE_PIN_DROP',
-      handleEnablePinDrop
-    );
-
-    window.addEventListener(
-      'SWARM_INTEL_UPDATE',
-      handleIntelUpdate
-    );
-
-    window.addEventListener(
-      'UPDATE_USER_PIN',
-      handleUpdateUserPin
-    );
-
-    window.addEventListener(
-      'TAB_CHANGED',
-      handleTabChange
-    );
+    window.addEventListener('ENABLE_PIN_DROP', () => setIsPinDropMode(true));
+    window.addEventListener('SWARM_INTEL_UPDATE', handleIntelUpdate);
+    window.addEventListener('UPDATE_USER_PIN', (event: any) => setUserPin(event.detail));
+    window.addEventListener('TAB_CHANGED', handleTabChange);
 
     return () => {
-      window.removeEventListener(
-        'ENABLE_PIN_DROP',
-        handleEnablePinDrop
-      );
-
-      window.removeEventListener(
-        'SWARM_INTEL_UPDATE',
-        handleIntelUpdate
-      );
-
-      window.removeEventListener(
-        'UPDATE_USER_PIN',
-        handleUpdateUserPin
-      );
-
-      window.removeEventListener(
-        'TAB_CHANGED',
-        handleTabChange
-      );
+      window.removeEventListener('ENABLE_PIN_DROP', () => setIsPinDropMode(true));
+      window.removeEventListener('SWARM_INTEL_UPDATE', handleIntelUpdate);
+      window.removeEventListener('UPDATE_USER_PIN', (event: any) => setUserPin(event.detail));
+      window.removeEventListener('TAB_CHANGED', handleTabChange);
     };
   }, [userPin]);
-
 
   const resetMap = () => {
     setUserPin(null);
@@ -314,7 +231,13 @@ export default function MapCore() {
         attributionControl={false}
       >
         <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" noWrap={false} />
-        <MapController isPinDropMode={isPinDropMode} setIsPinDropMode={setIsPinDropMode} setUserPin={setUserPin} userPin={userPin} />
+        <MapController
+          isPinDropMode={isPinDropMode}
+          setIsPinDropMode={setIsPinDropMode}
+          setUserPin={setUserPin}
+          userPin={userPin}
+          destPin={destPin}
+        />
 
         {/* 🛑 DYNAMIC GEOJSON LAYER: Highlight Outbreak Zones vs Vulnerable Zones */}
         {activeTab === 'health' && worldGeoJson && (
@@ -351,7 +274,18 @@ export default function MapCore() {
         ))}
 
         {userPin && <Marker position={[userPin.lat, userPin.lng]} icon={createUserPinIcon()} />}
-        {destPin && <Marker position={[destPin.lat, destPin.lng]} icon={createSafeZoneIcon()} />}
+        {destPin && (
+          <Marker
+            position={[destPin.lat, destPin.lng]}
+            icon={createSafeZoneIcon()}
+          >
+            <Popup className="bg-black/90 font-mono text-xs text-white border border-blue-500/50">
+              <b className="text-blue-400">
+                VERIFIED SAFE DESTINATION
+              </b>
+            </Popup>
+          </Marker>
+        )}
         {evacuationRoute && <Polyline positions={evacuationRoute} color="#22c55e" weight={3} dashArray="10, 10" className="animate-pulse" />}
       </MapContainer>
     </div>

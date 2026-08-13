@@ -285,11 +285,19 @@ export class ChayRaCrisisFleet extends BaseAgent {
       );
     }
 
-    if (requiredAgents.includes('Navigator')) {
+    // Navigator is mandatory whenever we have real user coordinates.
+    // This prevents the Scavenger model from accidentally suppressing
+    // verified hospital / shelter / bunker discovery.
+    if (
+      requiredAgents.includes('Navigator') ||
+      state.userCoords
+    ) {
       parallelTasks.push(
         (async () => {
           console.log(
-            '[ADK Runtime]: Parallel → Navigator'
+            state.userCoords
+              ? '[ADK Runtime]: Parallel → Navigator (mandatory with coordinates)'
+              : '[ADK Runtime]: Parallel → Navigator'
           );
 
           for await (const event of this.navigator.runAsync(ctx)) {
