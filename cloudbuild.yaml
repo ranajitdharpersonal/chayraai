@@ -5,6 +5,8 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
+      - '--build-arg'
+      - 'GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID'
       - '-t'
       - 'gcr.io/$PROJECT_ID/chayra-ai-swarm:$COMMIT_SHA'
       - '.'

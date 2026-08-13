@@ -12,6 +12,11 @@ RUN npm ci
 # 2. Build the application
 FROM base AS builder
 WORKDIR /app
+
+# Build-time GCP project ID required by registry-store.ts
+ARG GOOGLE_CLOUD_PROJECT_ID
+ENV GOOGLE_CLOUD_PROJECT_ID=$GOOGLE_CLOUD_PROJECT_ID
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED 1
