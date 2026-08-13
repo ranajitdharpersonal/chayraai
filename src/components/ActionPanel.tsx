@@ -91,38 +91,42 @@ export default function ActionPanel() {
   const dialOffset = circumference * (1 - meter.pct / 100);
 
   return (
-    <div className="flex flex-col w-full sm:max-w-[400px] pointer-events-auto transition-all duration-700 mx-auto h-full bg-[#0a0714]/70 backdrop-blur-2xl border border-violet-500/10 rounded-[28px] p-3 shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+    <div className="flex flex-col w-full sm:max-w-[400px] pointer-events-auto transition-all duration-700 mx-auto h-auto md:h-full bg-[#0a0714]/70 backdrop-blur-2xl border border-violet-500/10 rounded-[22px] md:rounded-[28px] p-2 md:p-3 shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
 
       {/* HEADER & TABS */}
-      <div className="bg-[#0a0714]/80 backdrop-blur-3xl border border-violet-500/10 rounded-[26px] p-1.5 mb-3 shadow-[0_20px_60px_rgba(0,0,0,0.55)] flex justify-between relative overflow-hidden z-20 shrink-0">
+      <div className="bg-[#0a0714]/80 backdrop-blur-3xl border border-violet-500/10 rounded-[20px] md:rounded-[26px] p-1 md:p-1.5 mb-2 md:mb-3 shadow-[0_20px_60px_rgba(0,0,0,0.55)] flex justify-between relative overflow-hidden z-20 shrink-0">
         <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 via-violet-500/10 to-cyan-500/10 opacity-60"></div>
-        <button onClick={() => handleTabChange('emergency')} className={`relative z-10 flex-1 py-2.5 flex items-center justify-center gap-2 rounded-2xl text-[10px] md:text-xs font-bold tracking-widest transition-all duration-500 ${activeTab === 'emergency' ? 'bg-red-500/15 text-red-400 border border-red-500/30 shadow-[inset_0_0_20px_rgba(220,38,38,0.15)]' : 'text-gray-500 hover:text-gray-300'}`}>
-          <ShieldAlert className="w-3.5 h-3.5" /> EMERGENCY
+        <button onClick={() => handleTabChange('emergency')} className={`relative z-10 flex-1 py-1.5 md:py-2.5 px-0.5 flex items-center justify-center gap-1 md:gap-2 rounded-[16px] md:rounded-2xl text-[7.5px] md:text-xs font-bold tracking-[0.05em] md:tracking-widest transition-all duration-500 ${activeTab === 'emergency' ? 'bg-red-500/15 text-red-400 border border-red-500/30 shadow-[inset_0_0_20px_rgba(220,38,38,0.15)]' : 'text-gray-500 hover:text-gray-300'}`}>
+          <ShieldAlert className="w-3 h-3 md:w-3.5 md:h-3.5" /> EMERGENCY
         </button>
-        <button onClick={() => handleTabChange('health')} className={`relative z-10 flex-1 py-2.5 flex items-center justify-center gap-2 rounded-2xl text-[10px] md:text-xs font-bold tracking-widest transition-all duration-500 ${activeTab === 'health' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-[inset_0_0_20px_rgba(6,182,212,0.15)]' : 'text-gray-500 hover:text-gray-300'}`}>
-          <Biohazard className="w-3.5 h-3.5" /> PUBLIC HEALTH
+        <button onClick={() => handleTabChange('health')} className={`relative z-10 flex-1 py-1.5 md:py-2.5 px-0.5 flex items-center justify-center gap-1 md:gap-2 rounded-[16px] md:rounded-2xl text-[7.5px] md:text-xs font-bold tracking-[0.05em] md:tracking-widest transition-all duration-500 ${activeTab === 'health' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-[inset_0_0_20px_rgba(6,182,212,0.15)]' : 'text-gray-500 hover:text-gray-300'}`}>
+          <Biohazard className="w-3 h-3 md:w-3.5 md:h-3.5" /> PUBLIC HEALTH
         </button>
-        <button onClick={() => handleTabChange('resilience')} className={`relative z-10 flex-1 py-2.5 flex items-center justify-center gap-2 rounded-2xl text-[10px] md:text-xs font-bold tracking-widest transition-all duration-500 ${activeTab === 'resilience' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.15)]' : 'text-gray-500 hover:text-gray-300'}`}>
-          <TrendingUp className="w-3.5 h-3.5" /> RESILIENCE
+        <button onClick={() => handleTabChange('resilience')} className={`relative z-10 flex-1 py-1.5 md:py-2.5 px-0.5 flex items-center justify-center gap-1 md:gap-2 rounded-[16px] md:rounded-2xl text-[7.5px] md:text-xs font-bold tracking-[0.05em] md:tracking-widest transition-all duration-500 ${activeTab === 'resilience' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.15)]' : 'text-gray-500 hover:text-gray-300'}`}>
+          <TrendingUp className="w-3 h-3 md:w-3.5 md:h-3.5" /> RESILIENCE
         </button>
       </div>
 
       {/* CONTENT AREA (Now flex-1 to push the Verifier down) */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide pb-4 space-y-3">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide pb-3 md:pb-4 space-y-2 md:space-y-3">
 
         {/* TIER 1: EMERGENCY */}
         {activeTab === 'emergency' && (
           <div className="grid grid-cols-2 gap-3 animate-in fade-in zoom-in-95 duration-500">
 
             {/* LIVE TELEMETRY */}
-            <div className="col-span-2 bg-[#0a0714]/80 backdrop-blur-md border border-violet-500/10 rounded-[26px] p-4 flex flex-col gap-3 relative overflow-hidden shadow-lg">
+            <div className="col-span-2 bg-[#0a0714]/80 backdrop-blur-md border border-violet-500/10 rounded-[20px] md:rounded-[26px] p-2.5 md:p-4 flex flex-col gap-2 md:gap-3 relative overflow-hidden shadow-lg">
               <div className="flex items-center gap-2 mb-1 border-b border-white/5 pb-2">
                 <Activity className="w-4 h-4 text-violet-400" />
-                <span className="text-xs font-semibold text-violet-300 tracking-widest uppercase">Live Telemetry</span>
+                <span className="text-[10px] md:text-xs font-semibold text-violet-300 tracking-[0.12em] md:tracking-widest uppercase">Live Telemetry</span>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="relative w-[84px] h-[84px] shrink-0">
-                  <svg viewBox="0 0 88 88" width="84" height="84" className="-rotate-90">
+              <div className="flex items-center gap-2.5 md:gap-4">
+                <div className="relative w-[64px] h-[64px] md:w-[84px] md:h-[84px] shrink-0">
+                  <svg viewBox="0 0 88 88" width="64" height="64" className="-rotate-90 md:hidden">
+                    <circle cx="44" cy="44" r="35" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
+                    <circle cx="44" cy="44" r="35" fill="none" stroke={meter.ring} strokeWidth="8" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={dialOffset} style={{ filter: `drop-shadow(0 0 8px ${meter.glow})`, transition: 'stroke-dashoffset 0.8s ease, stroke 0.8s ease' }} />
+                  </svg>
+                  <svg viewBox="0 0 88 88" width="84" height="84" className="-rotate-90 hidden md:block">
                     <circle cx="44" cy="44" r="35" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
                     <circle cx="44" cy="44" r="35" fill="none" stroke={meter.ring} strokeWidth="8" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={dialOffset} style={{ filter: `drop-shadow(0 0 8px ${meter.glow})`, transition: 'stroke-dashoffset 0.8s ease, stroke 0.8s ease' }} />
                   </svg>
@@ -140,7 +144,7 @@ export default function ActionPanel() {
             </div>
 
             {/* Radar Intel */}
-            <div className="col-span-2 bg-[#0a0714]/80 backdrop-blur-xl border border-red-500/10 rounded-[26px] p-4 shadow-lg relative overflow-hidden group">
+            <div className="col-span-2 bg-[#0a0714]/80 backdrop-blur-xl border border-red-500/10 rounded-[20px] md:rounded-[26px] p-2.5 md:p-4 shadow-lg relative overflow-hidden group">
               <div className="absolute -right-4 -top-4 w-20 h-20 bg-red-500/10 rounded-full blur-2xl group-hover:bg-red-500/20 transition-all"></div>
               <div className="flex items-center gap-2 mb-3">
                 <div className="p-1.5 bg-red-500/15 rounded-lg"><Radar className="w-4 h-4 text-red-400" /></div>
@@ -191,7 +195,7 @@ export default function ActionPanel() {
             </div>
 
             {/* Medical Triage */}
-            <div className="col-span-2 bg-[#0a0714]/80 backdrop-blur-xl border border-emerald-500/10 rounded-[26px] p-4 shadow-lg hover:border-emerald-500/30 transition-colors">
+            <div className="col-span-2 bg-[#0a0714]/80 backdrop-blur-xl border border-emerald-500/10 rounded-[20px] md:rounded-[26px] p-2.5 md:p-4 shadow-lg hover:border-emerald-500/30 transition-colors">
               <div className="flex items-center gap-2 mb-3">
                 <div className="p-1.5 bg-emerald-500/15 rounded-lg"><HeartPulse className="w-4 h-4 text-emerald-400" /></div>
                 <h3 className="text-xs font-bold text-emerald-400 tracking-widest">MEDICAL TRIAGE</h3>
@@ -288,7 +292,7 @@ export default function ActionPanel() {
       </div>
 
       {/* 🛑 THE VERIFIER / GROUND TRUTH INTEL (Moved and Pinned to Bottom!) */}
-      <div className="mt-3 bg-[#0a0714]/90 backdrop-blur-2xl border border-white/5 rounded-[22px] p-3 shadow-2xl relative overflow-hidden group hover:border-white/10 transition-colors shrink-0">
+      <div className="mt-2 md:mt-3 bg-[#0a0714]/90 backdrop-blur-2xl border border-white/5 rounded-[18px] md:rounded-[22px] p-2 md:p-3 shadow-2xl relative overflow-hidden group hover:border-white/10 transition-colors shrink-0">
           <div className={`absolute left-0 top-0 w-1.5 h-full transition-colors duration-500 ${!panelData.evidence ? 'bg-gray-600' : panelData.evidence.isVerified ? 'bg-emerald-500 shadow-[0_0_15px_#22c55e]' : 'bg-red-500 shadow-[0_0_15px_#ef4444]'}`}></div>
           
           <div className="flex justify-between items-center mb-2 pl-2">
