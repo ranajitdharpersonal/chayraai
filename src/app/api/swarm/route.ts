@@ -18,9 +18,45 @@ import '@/core/agents/publicHealth';
 const APP_NAME = 'chayra-enterprise-fleet';
 const DEFAULT_USER_ID = 'chayra-user';
 
+function extractEventResult(event: any): any | null {
+  const author =
+    typeof event?.author === 'string'
+      ? event.author
+      : '';
+
+  if (!author) {
+    return null;
+  }
+
+  const text =
+    event?.content?.parts
+      ?.map((part: any) => part?.text)
+      ?.filter(
+        (value: unknown): value is string =>
+          typeof value === 'string' &&
+          value.trim().length > 0,
+      )
+      ?.join('\n')
+      ?.trim() || '';
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Some ADK events can contain ordinary text.
+    // They are useful for logging but not safe to treat as
+    // structured agent output.
+    return null;
+  }
+}
+
 export async function POST(req: Request) {
   try {
-    const { message, coords, sessionId } = await req.json();
+    const { message, coords, sessionId } =
+      await req.json();
 
     if (
       typeof message !== 'string' ||
@@ -29,35 +65,30 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           type: 'error',
-          message: 'A valid crisis message is required.',
+          message:
+            'A valid crisis message is required.',
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const activeSessionId =
-      typeof sessionId === 'string' && sessionId.trim()
+      typeof sessionId === 'string' &&
+      sessionId.trim()
         ? sessionId
         : `session-${Date.now()}`;
 
     const userId = DEFAULT_USER_ID;
 
     console.log(
-      `[ADK API]: Starting ChayRa Enterprise Fleet for session ${activeSessionId}`
+      `[ADK API]: Starting ChayRa Enterprise Fleet for session ${activeSessionId}`,
     );
 
-    // ----------------------------------------------------------
-    // 1. CREATE ADK RUNNER
-    // ----------------------------------------------------------
-
-    const runner = new InMemoryRunner({
-      agent: chayRaCrisisFleet,
-      appName: APP_NAME,
-    });
-
-    // ----------------------------------------------------------
-    // 2. CREATE ADK SESSION
-    // ----------------------------------------------------------
+    const runner =
+      new InMemoryRunner({
+        agent: chayRaCrisisFleet,
+        appName: APP_NAME,
+      });
 
     await runner.sessionService.createSession({
       appName: APP_NAME,
@@ -73,18 +104,24 @@ export async function POST(req: Request) {
 
         context: {
           source: 'chayra-web',
-          startedAt: new Date().toISOString(),
+          startedAt:
+            new Date().toISOString(),
         },
       },
     });
 
-    // ----------------------------------------------------------
-    // 3. RUN THE ENTIRE CRISIS FLEET THROUGH ADK
-    // ----------------------------------------------------------
+    const newMessage =
+      createUserContent(
+        message.trim(),
+      );
 
-    const newMessage = createUserContent(
-      message.trim()
-    );
+    // Capture structured agent results directly from ADK events.
+    // This is the primary result path. Session state remains the
+    // persistence/fallback path.
+    const eventResults: Record<
+      string,
+      any
+    > = {};
 
     for await (const event of runner.runAsync({
       userId,
@@ -92,13 +129,24 @@ export async function POST(req: Request) {
       newMessage,
     })) {
       console.log(
-        `[ADK Event]: ${event.author || 'unknown'}`
+        `[ADK Event]: ${
+          event.author || 'unknown'
+        }`,
       );
-    }
 
-    // ----------------------------------------------------------
-    // 4. READ THE FINAL ADK SESSION STATE
-    // ----------------------------------------------------------
+      const structuredResult =
+        extractEventResult(event);
+
+      if (
+        structuredResult &&
+        typeof event.author ===
+          'string'
+      ) {
+        eventResults[
+          event.author
+        ] = structuredResult;
+      }
+    }
 
     const completedSession =
       await runner.sessionService.getSession({
@@ -109,25 +157,28 @@ export async function POST(req: Request) {
 
     if (!completedSession) {
       throw new Error(
-        'ADK session could not be retrieved after execution.'
+        'ADK session could not be retrieved after execution.',
       );
     }
 
     const state =
-      completedSession.state as Record<string, any>;
+      completedSession.state as Record<
+        string,
+        any
+      >;
 
     const mindGuardResult =
-      state['MindGuard_result'] ?? null;
-
-    // ----------------------------------------------------------
-    // 5. HANDLE MINDGUARD BLOCK
-    // ----------------------------------------------------------
+      eventResults.MindGuard ??
+      state['MindGuard_result'] ??
+      null;
 
     if (
       mindGuardResult &&
-      mindGuardResult.isEmergency === false &&
+      mindGuardResult.isEmergency ===
+        false &&
       !String(
-        mindGuardResult.reason ?? ''
+        mindGuardResult.reason ??
+          '',
       ).includes('Fallback')
     ) {
       return NextResponse.json({
@@ -138,34 +189,39 @@ export async function POST(req: Request) {
       });
     }
 
-    // ----------------------------------------------------------
-    // 6. EXTRACT ADK AGENT RESULTS
-    // ----------------------------------------------------------
-
     const scavengerResult =
-      state['Scavenger_result'] ?? {
-        threatLevel: 'UNKNOWN',
+      eventResults.Scavenger ??
+      state['Scavenger_result'] ??
+      {
+        threatLevel:
+          'UNKNOWN',
         requiredAgents: [],
       };
 
     const radarIntel =
-      state['Radar_result'] ?? null;
+      eventResults.Radar ??
+      state['Radar_result'] ??
+      null;
 
     const medicalData =
-      state['Medical_result'] ?? null;
+      eventResults.Medical ??
+      state['Medical_result'] ??
+      null;
 
     const navigationData =
-      state['Navigator_result'] ?? null;
+      eventResults.Navigator ??
+      state['Navigator_result'] ??
+      null;
 
     const healthData =
-      state['PublicHealth_result'] ?? null;
+      eventResults.PublicHealth ??
+      state['PublicHealth_result'] ??
+      null;
 
     const evidencePanel =
-      state['Verifier_result'] ?? null;
-
-    // ----------------------------------------------------------
-    // 7. PERSIST ENTERPRISE MEMORY
-    // ----------------------------------------------------------
+      eventResults.Verifier ??
+      state['Verifier_result'] ??
+      null;
 
     await PredictiveMemoryBank.saveSituationState(
       activeSessionId,
@@ -176,22 +232,16 @@ export async function POST(req: Request) {
         intel: radarIntel,
         timestamp:
           new Date().toISOString(),
-      }
+      },
     );
-
-    // ----------------------------------------------------------
-    // 8. PREDICTIVE RESILIENCE MEMORY
-    //
-    // Only spend an additional Gemini call for a meaningful
-    // high/critical threat. This keeps normal requests cheaper.
-    // ----------------------------------------------------------
 
     let resiliencePrediction =
       'Resilience engine standing by.';
 
     const threatLevel =
       String(
-        scavengerResult.threatLevel ?? 'UNKNOWN'
+        scavengerResult.threatLevel ??
+          'UNKNOWN',
       ).toUpperCase();
 
     if (
@@ -201,17 +251,54 @@ export async function POST(req: Request) {
       resiliencePrediction =
         await PredictiveMemoryBank
           .predictThreatEvolution(
-            activeSessionId
+            activeSessionId,
           );
     }
 
-    // ----------------------------------------------------------
-    // 9. RETURN THE API CONTRACT USED BY THE UI
-    // ----------------------------------------------------------
+    const resolvedDestCoords =
+      navigationData?.destCoords ??
+      state['Navigator_result']
+        ?.destCoords ??
+      null;
+
+    const resolvedNavigationText =
+      navigationData?.text ??
+      state['Navigator_result']
+        ?.text ??
+      null;
+
+    const resolvedIsRealData =
+      navigationData?.isRealData ??
+      state['Navigator_result']
+        ?.isRealData ??
+      false;
+
+    console.log(
+      '[ADK API]: Navigator result resolution:',
+      {
+        hasNavigatorEvent:
+          Boolean(
+            eventResults.Navigator,
+          ),
+        hasNavigatorState:
+          Boolean(
+            state[
+              'Navigator_result'
+            ],
+          ),
+        hasDestCoords:
+          Boolean(
+            resolvedDestCoords,
+          ),
+        isRealData:
+          resolvedIsRealData,
+      },
+    );
 
     return NextResponse.json({
       type: 'success',
-      sessionId: activeSessionId,
+      sessionId:
+        activeSessionId,
 
       threatLevel:
         scavengerResult.threatLevel,
@@ -221,37 +308,35 @@ export async function POST(req: Request) {
       medical:
         medicalData,
 
-      // Keep the full Navigator result.
       navigation:
         navigationData,
 
-      // Expose coordinates directly for map consumers.
-      destCoords:
-        navigationData?.destCoords ??
-        null,
+      navigationText:
+        resolvedNavigationText,
 
-      // Optional convenience flag for the UI.
+      destCoords:
+        resolvedDestCoords,
+
       isRealData:
-        navigationData?.isRealData ??
-        false,
+        resolvedIsRealData,
 
       evidence:
         evidencePanel,
 
       healthAdvisory:
-        healthData?.healthAdvisory,
+        healthData
+          ?.healthAdvisory,
 
       outbreakReports:
-        healthData?.outbreakReports,
+        healthData
+          ?.outbreakReports,
 
-      // Resilience / Predictive Memory.
       resiliencePrediction,
     });
-
   } catch (error: any) {
     console.error(
       '[ADK Swarm Orchestrator]: Critical Failure',
-      error
+      error,
     );
 
     return NextResponse.json(
@@ -261,7 +346,7 @@ export async function POST(req: Request) {
           error?.message ||
           'Unknown ADK Swarm Error',
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
