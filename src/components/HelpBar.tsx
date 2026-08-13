@@ -10,7 +10,6 @@ export default function HelpBar() {
 
   const [latency, setLatency] = useState<number | null>(null);
   const [stability, setStability] = useState(99.9);
-  const [securityKey, setSecurityKey] = useState("K1024-X91");
 
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
   const [userCoords, setUserCoords] = useState<{ lat: number, lng: number } | null>(null);
@@ -49,9 +48,11 @@ export default function HelpBar() {
     window.addEventListener('SYSTEM_RESET', handleSystemReset);
 
     const interval = setInterval(() => {
-      setStability(parseFloat((99.7 + Math.random() * 0.2).toFixed(2)));
-      const keys = ["K1024-X91", "AES-Q256", "KYB-1024", "X-SHIELD-V2"];
-      setSecurityKey(keys[Math.floor(Math.random() * keys.length)]);
+      setStability(
+        parseFloat(
+          (99.7 + Math.random() * 0.2).toFixed(2)
+        )
+      );
     }, 3000);
 
     return () => {
@@ -64,58 +65,71 @@ export default function HelpBar() {
     window.dispatchEvent(new CustomEvent('SYSTEM_RESET'));
   };
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const recognitionRef =
+    useRef<any>(null);
 
-  const toggleRecording = async () => {
-    if (isListening) {
-      if (mediaRecorderRef.current) mediaRecorderRef.current.stop();
+  const toggleRecording = () => {
+    const SpeechRecognitionAPI =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionAPI) {
+      alert(
+        "Voice input is not supported in this browser. Please use Chrome or Edge."
+      );
       return;
     }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) audioChunksRef.current.push(event.data);
-      };
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
 
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        stream.getTracks().forEach(track => track.stop());
-        await processAudio(audioBlob);
-      };
+    const recognition =
+      new SpeechRecognitionAPI();
 
-      mediaRecorder.start();
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
       setIsListening(true);
       setInput("");
-    } catch (err) {
-      console.error("Mic permission error:", err);
-      alert("Microphone access denied! Please allow mic permissions.");
-    }
-  };
+      setChatLog(null);
+    };
 
-  const processAudio = async (audioBlob: Blob) => {
-    setIsProcessing(true);
-    setInput("Decoding voice transmission...");
-    try {
-      const formData = new FormData();
-      formData.append('file', audioBlob, 'voice.webm');
-      const res = await fetch('/api/voice', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      let finalText = data.text.trim();
-      finalText = finalText.replace(/(?:\bthank you\.?\b|\bthanks for watching\.?\b)/gi, '').trim();
-      setInput(finalText);
-    } catch (err: any) {
-      setInput("");
-      setChatLog({ role: 'error', text: `Voice decode failed: ${err.message}` });
-    } finally {
-      setIsProcessing(false);
+    recognition.onresult = (event: any) => {
+      const transcript =
+        event.results?.[0]?.[0]?.transcript
+          ?.trim() || "";
+
+      if (transcript) {
+        setInput(transcript);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error(
+        "[Voice]: Speech recognition failed.",
+        event
+      );
+
+      setChatLog({
+        role: "error",
+        text:
+          `Voice recognition failed: ${
+            event?.error || "unknown error"
+          }`,
+      });
+    };
+
+    recognition.onend = () => {
       setIsListening(false);
-    }
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
   const handleInitialSend = () => {
@@ -234,6 +248,10 @@ export default function HelpBar() {
               Array.isArray(data.outbreakReports)
                 ? data.outbreakReports
                 : [],
+
+            resiliencePrediction:
+              data.resiliencePrediction ||
+              "Resilience engine standing by.",
           };
           window.dispatchEvent(new CustomEvent('SWARM_INTEL_UPDATE', { detail: actionData }));
         }
