@@ -14,29 +14,57 @@ const REGISTERED_AGENTS = [
 
 let heartbeatStarted = false;
 
-export function startAgentRegistryHeartbeat() {
+function isRuntimeEnvironment(): boolean {
+  if (typeof window !== 'undefined') {
+    return false;
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    return true;
+  }
+
+  // Cloud Run / Node runtime only.
+  return (
+    process.env.NEXT_RUNTIME === 'nodejs' ||
+    !!process.env.K_SERVICE
+  );
+}
+
+export function startAgentRegistryHeartbeat(): void {
   if (heartbeatStarted) {
+    return;
+  }
+
+  if (!isRuntimeEnvironment()) {
     return;
   }
 
   heartbeatStarted = true;
 
-  const sendHeartbeats = async () => {
-    await Promise.all(
-      REGISTERED_AGENTS.map((agentName) =>
-        AgentRegistryStore.heartbeat(agentName)
-      )
-    );
+  const sendHeartbeats = async (): Promise<void> => {
+    try {
+      await Promise.all(
+        REGISTERED_AGENTS.map(
+          (agentName) =>
+            AgentRegistryStore.heartbeat(
+              agentName
+            )
+        )
+      );
 
-    console.log(
-      `[Agent Registry]: Fleet heartbeat updated for ${REGISTERED_AGENTS.length} agents.`
-    );
+      console.log(
+        `[Agent Registry]: Fleet heartbeat updated for ${REGISTERED_AGENTS.length} agents.`
+      );
+    } catch (error) {
+      console.error(
+        '[Agent Registry]: Fleet heartbeat cycle failed.',
+        error
+      );
+    }
   };
 
-  // Initial heartbeat
   void sendHeartbeats();
 
-  // Keep the registry lifecycle state fresh.
   setInterval(
     () => {
       void sendHeartbeats();
