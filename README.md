@@ -27,6 +27,20 @@ https://github.com/ranajitdharpersonal/chayraai
 
 ---
 
+## Why ChayRa?
+
+Most AI systems answer questions.
+
+**ChayRa coordinates a response.**
+
+A single crisis request can trigger a governed agent fleet that combines
+live intelligence, real-world navigation, public-health analysis,
+evidence verification and persistent operational memory.
+
+> **One request. Multiple specialist agents. One verified operational response.**
+
+---
+
 ## The Core Idea
 
 ```text
@@ -135,11 +149,11 @@ Verifier cross-checks crisis information and produces an evidence-oriented respo
 
 ### 🧠 Persistent Operational Memory
 
-Firestore-backed memory preserves crisis state, public-health intelligence, historical events and fleet state for downstream reasoning and resilience analysis.
+Firestore-backed memory preserves crisis state, public-health intelligence, historical events and fleet state.
 
 ### 🌐 Tactical Command Interface
 
-The Next.js interface surfaces telemetry, tactical radar, medical triage, live sources, public-health intelligence, verification and map-based actions in one operational workspace.
+A live Next.js command interface unifies telemetry, maps, tactical intelligence, verification and response actions.
 
 ---
 
@@ -154,6 +168,8 @@ The Next.js interface surfaces telemetry, tactical radar, medical triage, live s
 | **Navigator** | Nearby hospitals, shelters, bunkers, routes and tactical destinations |
 | **PublicHealth** | Disease/outbreak intelligence, health advisories and public-health analysis |
 | **Verifier** | Evidence generation, cross-source validation and confidence-oriented verification |
+
+> The key design choice is not simply having multiple agents — it is having a governed runtime that coordinates them as a fleet.
 
 ### Fleet Execution Pattern
 
@@ -183,6 +199,10 @@ The Next.js interface surfaces telemetry, tactical radar, medical triage, live s
 The orchestration root is implemented with Google ADK. ChayRa wraps its specialist registry handlers as ADK agents and executes the core crisis path sequentially followed by parallel specialist execution and final verification.
 
 ---
+
+### From Intent to Action
+
+ChayRa is designed to convert a natural-language crisis request into a real-world operational result — not just a generated answer.
 
 ## End-to-End Crisis Flow
 
@@ -244,6 +264,10 @@ Navigation text
 
 The result is forwarded through the ADK event path and surfaced in the frontend map.
 
+### Production-Proven Behavior
+
+In live production testing, Navigator successfully resolved real hospital and shelter/bunker destinations with distance and destination coordinates, allowing the frontend map to distinguish real navigation data from fallback responses.
+
 ---
 
 ## Public Health Intelligence
@@ -264,7 +288,9 @@ Firestore snapshot
 Frontend public-health panel + map
 ```
 
-When live model analysis is temporarily unavailable, ChayRa can fall back to the most recent verified snapshot rather than presenting an empty operational state.
+When live model analysis is temporarily unavailable, ChayRa preserves the most recent verified public-health snapshot instead of failing to an empty state.
+
+This allows the system to continue surfacing trusted outbreak intelligence while clearly distinguishing live analysis from persisted verified information.
 
 ---
 
@@ -307,7 +333,7 @@ Production Cloud Run services use Google Cloud service-account identity and Appl
 
 ### Agent Governance
 
-ChayRa's custom enterprise registry tracks agent metadata, versioning, roles, status, capabilities and clearance levels.
+ChayRa maintains its own enterprise agent control layer for metadata, versioning, capabilities, status and clearance — giving the fleet a controlled discovery and execution path around Google ADK.
 
 ---
 
@@ -594,7 +620,7 @@ Docker build
    ↓
 Container image
    ↓
-Google Container Registry
+Container Registry
    ↓
 Cloud Run public service
    ↓
@@ -638,22 +664,40 @@ For a fast end-to-end check:
 
 ## Production Evidence
 
-ChayRa has been deployed and tested on Google Cloud Run.
+ChayRa is live on Google Cloud Run and has been exercised through the complete crisis-response path.
 
-The production system has been exercised end-to-end across:
+### Verified in Production
 
-- Model Armor security verification
-- ADK multi-agent execution
-- real hospital / shelter / bunker discovery
-- real destination coordinates
-- public-health source retrieval
-- Firestore persistence
-- Verifier execution
-- Cloud Run production requests
+- ✅ Google ADK multi-agent execution
+- ✅ Model Armor security verification
+- ✅ Real hospital / shelter / bunker discovery
+- ✅ Real destination coordinates returned to the API
+- ✅ Firestore persistence
+- ✅ WHO public-health intelligence retrieval
+- ✅ Verifier execution
+- ✅ Public Cloud Run deployment
+- ✅ Private runtime deployment
+- ✅ Background radar execution
 
-The system is designed so real-data routing can be distinguished from fallback behavior.
+### Example Operational Result
+
+A production Navigator execution successfully resolved real nearby hospital and shelter/bunker destinations and returned destination coordinates with an explicit real-data signal for frontend rendering.
 
 ---
+
+## Why ChayRa Fits the Judging Criteria
+
+### 40% — Innovation & Operational Utility
+
+ChayRa turns one natural-language crisis request into an autonomous workflow spanning live threat intelligence, medical analysis, real-world navigation, public-health intelligence and evidence verification.
+
+### 30% — Architectural Discipline & Tech Stack
+
+The system combines Google ADK with a custom enterprise agent control layer, Firestore-backed memory, Model Armor security, structured agent execution and Google Cloud production infrastructure.
+
+### 30% — Demo & Production Readiness
+
+ChayRa is deployed on Cloud Run and has been exercised end-to-end with real external intelligence, real destination coordinates, persistent state and production security controls.
 
 ## Why This Fits the Fortified Enterprise Fleet Track
 
@@ -681,23 +725,13 @@ This gives ChayRa fine-grained control over crisis-specific orchestration, speci
 
 ## Hackathon Value
 
-ChayRa is built for a simple proposition:
+## The ChayRa Thesis
 
 > **During a crisis, the AI should do more than answer. It should coordinate.**
 
-A single crisis request can activate:
+A single request can activate safety verification, crisis understanding, live intelligence, medical reasoning, real-world facility search, public-health analysis, evidence verification, persistent state and actionable map output.
 
-- safety verification
-- crisis understanding
-- live threat intelligence
-- medical reasoning
-- real-world facility search
-- public-health intelligence
-- evidence verification
-- persistent state
-- actionable map output
-
-That is the difference between a chatbot and an autonomous crisis-response fleet.
+**That is the difference between a chatbot and an autonomous crisis-response fleet.**
 
 ---
 
@@ -750,16 +784,10 @@ Model-based analysis can also encounter temporary capacity exhaustion. ChayRa th
 
 ## Future Evolution
 
-Planned directions include:
-
-- stronger multi-session identity
 - deeper long-running autonomous workflows
+- stronger multi-session identity and memory
 - broader resilience forecasting
-- additional trusted intelligence sources
-- richer offline / mesh-rescue capability
-- expanded agent observability
-- more advanced route optimization
-- deeper enterprise policy controls
+- richer offline / mesh-rescue capabilities
 
 ---
 
@@ -775,13 +803,9 @@ Planned directions include:
 
 ChayRa AI 3.0 is a solo-built autonomous crisis-response system created for the **All Things Agentic Hackathon**.
 
-Built with the goal of exploring what happens when AI moves from:
+Built to explore one question:
 
-> **“Ask me.”**
-
-to:
-
-> **“Give me the crisis. I’ll coordinate the response.”**
+> **What happens when AI stops being a chatbot and starts behaving like an operational response fleet?**
 
 ---
 
