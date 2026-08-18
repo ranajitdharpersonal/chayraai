@@ -41,6 +41,30 @@ evidence verification and persistent operational memory.
 
 ---
 
+## Why This Fits the Fortified Enterprise Fleet Track
+
+ChayRa was designed around the core enterprise-agent ideas of:
+
+```text
+Agent Discovery
+      ↓
+Agent Orchestration
+      ↓
+Persistent State
+      ↓
+Security & Governance
+      ↓
+Observability
+      ↓
+Operational Action
+```
+
+The implementation uses a custom enterprise registry/control layer on top of Google ADK and Google Cloud services, rather than claiming direct use of every managed Gemini Enterprise Agent Platform component.
+
+This gives ChayRa fine-grained control over crisis-specific orchestration, specialist routing, external intelligence, persistence and failure handling while remaining Google Cloud-native.
+
+---
+
 ## The Core Idea
 
 ```text
@@ -372,7 +396,7 @@ MindGuard → Scavenger → Radar
 
 ## Google Cloud Production Architecture
 
-ChayRa is deployed as two Cloud Run services:
+ChayRa is deployed with a public application service and a separately deployed private runtime service for autonomous/background workloads.
 
 ```text
                      Google Cloud
@@ -400,6 +424,47 @@ ChayRa is deployed as two Cloud Run services:
 - **Google Cloud service account**: runtime identity and permissions
 - **Model Armor**: security gateway
 - **Cloud Logging / tracing**: production observability
+
+---
+
+## Production Evidence
+
+ChayRa is live on Google Cloud Run and has been exercised through the complete crisis-response path.
+
+### Verified in Production
+
+- ✅ Google ADK multi-agent execution
+- ✅ Model Armor security verification
+- ✅ Real hospital / shelter / bunker discovery
+- ✅ Real destination coordinates returned to the API
+- ✅ Firestore persistence
+- ✅ WHO public-health intelligence retrieval
+- ✅ Verifier execution
+- ✅ Public Cloud Run deployment
+- ✅ Private runtime deployment
+- ✅ Background radar execution
+
+### Example Operational Result
+
+A production Navigator execution successfully resolved real nearby hospital and shelter/bunker destinations and returned destination coordinates with an explicit real-data signal for frontend rendering.
+
+---
+
+## Why ChayRa Fits the Judging Criteria
+
+### 40% — Innovation & Operational Utility
+
+ChayRa turns one natural-language crisis request into an autonomous workflow spanning live threat intelligence, medical analysis, real-world navigation, public-health intelligence and evidence verification.
+
+### 30% — Architectural Discipline & Tech Stack
+
+The system combines Google ADK with a custom enterprise agent control layer, Firestore-backed memory, Model Armor security, structured agent execution and Google Cloud production infrastructure.
+
+### 30% — Demo & Production Readiness
+
+ChayRa is deployed on Cloud Run and has been exercised end-to-end with real external intelligence, real destination coordinates, persistent state and production security controls.
+
+
 
 ---
 
@@ -682,44 +747,6 @@ ChayRa is live on Google Cloud Run and has been exercised through the complete c
 ### Example Operational Result
 
 A production Navigator execution successfully resolved real nearby hospital and shelter/bunker destinations and returned destination coordinates with an explicit real-data signal for frontend rendering.
-
----
-
-## Why ChayRa Fits the Judging Criteria
-
-### 40% — Innovation & Operational Utility
-
-ChayRa turns one natural-language crisis request into an autonomous workflow spanning live threat intelligence, medical analysis, real-world navigation, public-health intelligence and evidence verification.
-
-### 30% — Architectural Discipline & Tech Stack
-
-The system combines Google ADK with a custom enterprise agent control layer, Firestore-backed memory, Model Armor security, structured agent execution and Google Cloud production infrastructure.
-
-### 30% — Demo & Production Readiness
-
-ChayRa is deployed on Cloud Run and has been exercised end-to-end with real external intelligence, real destination coordinates, persistent state and production security controls.
-
-## Why This Fits the Fortified Enterprise Fleet Track
-
-ChayRa was designed around the core enterprise-agent ideas of:
-
-```text
-Agent Discovery
-      ↓
-Agent Orchestration
-      ↓
-Persistent State
-      ↓
-Security & Governance
-      ↓
-Observability
-      ↓
-Operational Action
-```
-
-The implementation uses a custom enterprise registry/control layer on top of Google ADK and Google Cloud services, rather than claiming direct use of every managed Gemini Enterprise Agent Platform component.
-
-This gives ChayRa fine-grained control over crisis-specific orchestration, specialist routing, external intelligence, persistence and failure handling while remaining Google Cloud-native.
 
 ---
 
