@@ -56,6 +56,11 @@ function normalizeDate(value: unknown): string {
   }
   return new Date().toISOString();
 }
+function toReliefWebDate(date: Date): string {
+  return date
+    .toISOString()
+    .replace(/\.\d{3}Z$/, '+00:00');
+}
 
 function cleanText(value: unknown, fallback = ''): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
@@ -64,11 +69,11 @@ function cleanText(value: unknown, fallback = ''): string {
 function isValidZone(zone: any): zone is Zone {
   return Boolean(
     zone &&
-      typeof zone.isoCode === 'string' &&
-      typeof zone.lat === 'number' &&
-      typeof zone.lng === 'number' &&
-      Number.isFinite(zone.lat) &&
-      Number.isFinite(zone.lng),
+    typeof zone.isoCode === 'string' &&
+    typeof zone.lat === 'number' &&
+    typeof zone.lng === 'number' &&
+    Number.isFinite(zone.lat) &&
+    Number.isFinite(zone.lng),
   );
 }
 
@@ -82,8 +87,8 @@ function calculateSnapshotAgeDays(timestamp: unknown): number | null {
 function hasVerifiedSnapshot(state: any): boolean {
   return Boolean(
     state &&
-      Array.isArray(state.officialAlerts) &&
-      state.officialAlerts.length > 0,
+    Array.isArray(state.officialAlerts) &&
+    state.officialAlerts.length > 0,
   );
 }
 
@@ -130,7 +135,10 @@ async function fetchReliefWebAlerts(fromDate: Date, now: Date): Promise<Official
         },
         filter: {
           field: 'date.created',
-          value: { from: fromDate.toISOString(), to: now.toISOString() },
+          value: {
+            from: toReliefWebDate(fromDate),
+            to: toReliefWebDate(now),
+          },
         },
         sort: ['date.created:desc'],
         fields: {
@@ -256,16 +264,16 @@ async function runPublicHealth(data: { location?: string }): Promise<PublicHealt
 
   const historicalContext = previousHealthState
     ? JSON.stringify({
-        analysisTimestamp: previousHealthState.analysisTimestamp,
-        sourceStatus: previousHealthState.sourceStatus,
-        healthAdvisory: previousHealthState.healthAdvisory,
-        officialAlerts: Array.isArray(previousHealthState.officialAlerts)
-          ? previousHealthState.officialAlerts.slice(-10)
-          : [],
-        outbreakReports: Array.isArray(previousHealthState.outbreakReports)
-          ? previousHealthState.outbreakReports.slice(-10)
-          : [],
-      })
+      analysisTimestamp: previousHealthState.analysisTimestamp,
+      sourceStatus: previousHealthState.sourceStatus,
+      healthAdvisory: previousHealthState.healthAdvisory,
+      officialAlerts: Array.isArray(previousHealthState.officialAlerts)
+        ? previousHealthState.officialAlerts.slice(-10)
+        : [],
+      outbreakReports: Array.isArray(previousHealthState.outbreakReports)
+        ? previousHealthState.outbreakReports.slice(-10)
+        : [],
+    })
     : 'No previous public-health memory available.';
 
   try {
@@ -359,7 +367,7 @@ Return ONLY JSON:
           : liveSourceAvailable
             ? `Found ${officialAlerts.length} verified public-health report(s) across WHO Disease Outbreak News and UN ReliefWeb in the last ${LOOKBACK_DAYS} days.`
             : previousHealthState?.healthAdvisory ||
-              `No verified public-health event was confirmed by the currently reachable trusted sources in the last ${LOOKBACK_DAYS} days.`,
+            `No verified public-health event was confirmed by the currently reachable trusted sources in the last ${LOOKBACK_DAYS} days.`,
       outbreakReports,
       officialAlerts,
       metadata: {
