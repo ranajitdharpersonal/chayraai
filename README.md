@@ -1,4 +1,4 @@
-# ChayRa AI 3.0
+# ChayRa AI
 
 ### Autonomous Crisis Response Enterprise Fleet
 
@@ -10,8 +10,9 @@
 [![Cloud Run](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run-4285F4?logo=googlecloud)](https://cloud.google.com/run)
 [![Firestore](https://img.shields.io/badge/Google%20Cloud-Firestore-FFCA28?logo=firebase)](https://firebase.google.com/docs/firestore)
 [![Model Armor](https://img.shields.io/badge/Google%20Cloud-Model%20Armor-34A853?logo=googlecloud)](https://cloud.google.com/security/products/model-armor)
+[![▶ WATCH DEMO](https://img.shields.io/badge/▶_WATCH_DEMO-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/2HUis90iZWM)
 
-ChayRa AI 3.0 is an autonomous, multi-agent crisis-response system designed to move beyond conversational AI.
+ChayRa AI is an autonomous, multi-agent crisis-response system designed to move beyond conversational AI.
 
 Instead of waiting for a user to request one answer at a time, ChayRa activates a coordinated enterprise-style agent fleet that can interpret a crisis, gather live intelligence, find actionable destinations, analyze public-health signals, cross-check evidence, persist operational state, and return verified actions through a live tactical interface.
 
@@ -20,7 +21,13 @@ Instead of waiting for a user to request one answer at a time, ChayRa activates 
 ## Live Production Demo
 
 **Hosted Application:**  
-https://chayra-ai-service-qnibmyampq-uc.a.run.app
+https://chayra-ai-service-936258611923.us-central1.run.app
+
+
+### Demo Video
+
+[![ChayRa AI Demo](https://img.youtube.com/vi/2HUis90iZWM/maxresdefault.jpg)](https://www.youtube.com/watch?v=2HUis90iZWM)
+
 
 **Source Code:**  
 https://github.com/ranajitdharpersonal/chayraai
@@ -762,7 +769,9 @@ A single request can activate safety verification, crisis understanding, live in
 
 ---
 
-## Demo
+### Demo Video
+
+[Watch the full ChayRa AI demo on YouTube](https://youtu.be/2HUis90iZWM)
 
 ### Judge Demo Flow
 
@@ -828,7 +837,7 @@ Model-based analysis can also encounter temporary capacity exhaustion. ChayRa th
 
 ### Ranajit Dhar
 
-ChayRa AI 3.0 is a solo-built autonomous crisis-response system created for the **All Things Agentic Hackathon**.
+ChayRa AI is a solo-built autonomous crisis-response system created for the **All Things Agentic Hackathon**.
 
 Built to explore one question:
 
