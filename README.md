@@ -10,7 +10,7 @@
 [![Cloud Run](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run-4285F4?logo=googlecloud)](https://cloud.google.com/run)
 [![Firestore](https://img.shields.io/badge/Google%20Cloud-Firestore-FFCA28?logo=firebase)](https://firebase.google.com/docs/firestore)
 [![Model Armor](https://img.shields.io/badge/Google%20Cloud-Model%20Armor-34A853?logo=googlecloud)](https://cloud.google.com/security/products/model-armor)
-[![▶ WATCH DEMO](https://img.shields.io/badge/▶_WATCH_DEMO-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/2HUis90iZWM)
+[![▶ WATCH DEMO](https://img.shields.io/badge/▶_WATCH_DEMO-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/X2GPxNOW8BQ)
 
 ChayRa AI is an autonomous, multi-agent crisis-response system designed to move beyond conversational AI.
 
@@ -26,7 +26,7 @@ https://chayra-ai-service-936258611923.us-central1.run.app
 
 ### Demo Video
 
-[![ChayRa AI Demo](https://img.youtube.com/vi/2HUis90iZWM/maxresdefault.jpg)](https://www.youtube.com/watch?v=2HUis90iZWM)
+[![ChayRa AI Demo](https://img.youtube.com/vi/X2GPxNOW8BQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=X2GPxNOW8BQ)
 
 
 **Source Code:**  
@@ -771,7 +771,7 @@ A single request can activate safety verification, crisis understanding, live in
 
 ### Demo Video
 
-[Watch the full ChayRa AI demo on YouTube](https://youtu.be/2HUis90iZWM)
+[Watch the full ChayRa AI demo on YouTube](https://youtu.be/X2GPxNOW8BQ)
 
 ### Judge Demo Flow
 
