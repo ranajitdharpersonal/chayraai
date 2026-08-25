@@ -48,27 +48,23 @@ evidence verification and persistent operational memory.
 
 ---
 
+```markdown
 ## Why This Fits the Fortified Enterprise Fleet Track
 
-ChayRa was designed around the core enterprise-agent ideas of:
+ChayRa was intentionally engineered around the four capabilities emphasized by this track:
 
-```text
-Agent Discovery
-      ↓
-Agent Orchestration
-      ↓
-Persistent State
-      ↓
-Security & Governance
-      ↓
-Observability
-      ↓
-Operational Action
-```
+**Discovery & Lifecycle** — A custom enterprise agent control layer manages agent metadata, versions, capabilities, status, heartbeat, clearance, discovery and routing.
+
+**Core Execution & State** — Google ADK coordinates the fleet, while Firestore provides persistent operational memory and a private autonomous runtime supports background execution beyond a single request.
+
+**Security & Governance** — MindGuard places Google Cloud Model Armor in the request path before downstream crisis processing, with Google Cloud service identity and clearance-aware agent execution.
+
+**Telemetry** — Trace IDs, ADK events, fleet heartbeat and Cloud Logging provide visibility into what the fleet actually did.
 
 The implementation uses a custom enterprise registry/control layer on top of Google ADK and Google Cloud services, rather than claiming direct use of every managed Gemini Enterprise Agent Platform component.
 
 This gives ChayRa fine-grained control over crisis-specific orchestration, specialist routing, external intelligence, persistence and failure handling while remaining Google Cloud-native.
+```
 
 ---
 
