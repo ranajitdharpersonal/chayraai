@@ -816,7 +816,7 @@ export default function MapCore() {
         }}
         zoomControl={false}
         attributionControl={
-          false
+          true
         }
       >
         <TileLayer
