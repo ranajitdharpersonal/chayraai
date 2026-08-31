@@ -344,7 +344,7 @@ export default function HelpBar() {
       )}
 
       {chatLog && (
-        <div className="w-full bg-black/60 backdrop-blur-md border border-white/10 p-3 rounded-xl relative overflow-hidden transition-all animate-in fade-in slide-in-from-bottom-2 mx-1 mt-1 shadow-[0_0_20px_rgba(16,185,129,0.05)]">
+        <div className="w-full bg-black/60 backdrop-blur-md border border-white/10 p-3 rounded-xl relative overflow-hidden transition-all animate-in fade-in slide-in-from-bottom-2 mx-1 mt-1 shadow-[0_0_20px_rgba(16,185,129,0.05)] max-h-[92px] md:max-h-none overflow-y-auto">
           <div className={`absolute top-0 left-0 w-[2px] h-full ${chatLog.role === 'error' ? 'bg-red-500 shadow-[0_0_15px_rgba(220,38,38,1)]' : 'bg-gradient-to-b from-transparent via-emerald-500 to-transparent shadow-[0_0_15px_rgba(16,185,129,1)]'}`}></div>
           {(isProcessing || chatLog.role === 'ai') && !isPinDropMode && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3 pb-3 border-b border-white/5 relative z-10">
