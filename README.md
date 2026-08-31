@@ -48,7 +48,6 @@ evidence verification and persistent operational memory.
 
 ---
 
-```markdown
 ## Why This Fits the Fortified Enterprise Fleet Track
 
 ChayRa was intentionally engineered around the four capabilities emphasized by this track:
@@ -64,7 +63,6 @@ ChayRa was intentionally engineered around the four capabilities emphasized by t
 The implementation uses a custom enterprise registry/control layer on top of Google ADK and Google Cloud services, rather than claiming direct use of every managed Gemini Enterprise Agent Platform component.
 
 This gives ChayRa fine-grained control over crisis-specific orchestration, specialist routing, external intelligence, persistence and failure handling while remaining Google Cloud-native.
-```
 
 ---
 
