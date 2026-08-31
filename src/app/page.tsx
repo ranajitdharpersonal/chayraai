@@ -82,7 +82,7 @@ export default function Home() {
         <div
           className="
             absolute
-            bottom-2
+            bottom-10
             left-2
             right-2
             md:bottom-6
