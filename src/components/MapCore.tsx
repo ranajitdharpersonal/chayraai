@@ -592,9 +592,9 @@ export default function MapCore() {
                     activeZone?.lng,
                   )
                     ? [
-                        activeZone.lat,
-                        activeZone.lng,
-                      ] as LatLng
+                      activeZone.lat,
+                      activeZone.lng,
+                    ] as LatLng
                     : null;
 
                 const toCoords =
@@ -603,9 +603,9 @@ export default function MapCore() {
                     zone?.lng,
                   )
                     ? [
-                        zone.lat,
-                        zone.lng,
-                      ] as LatLng
+                      zone.lat,
+                      zone.lng,
+                    ] as LatLng
                     : null;
 
                 nextSpreadTargets.push(
@@ -648,9 +648,9 @@ export default function MapCore() {
         if (
           data.destCoords &&
           typeof data.destCoords.lat ===
-            'number' &&
+          'number' &&
           typeof data.destCoords.lng ===
-            'number'
+          'number'
         ) {
           const destination = {
             lat:
@@ -780,15 +780,15 @@ export default function MapCore() {
         isPinDropMode ||
         destPin
       ) && (
-        <button
-          onClick={
-            triggerResetFromMap
-          }
-          className="absolute top-20 left-3 md:top-32 md:left-6 z-[1000] bg-black/80 backdrop-blur-md border border-gray-600 p-2 md:p-3 rounded-full text-white hover:bg-red-500/20 hover:border-red-500 hover:text-red-500 transition-all shadow-lg group"
-        >
-          <RotateCcw className="w-5 h-5 group-hover:-rotate-180 transition-transform duration-500" />
-        </button>
-      )}
+          <button
+            onClick={
+              triggerResetFromMap
+            }
+            className="absolute top-20 left-3 md:top-32 md:left-6 z-[1000] bg-black/80 backdrop-blur-md border border-gray-600 p-2 md:p-3 rounded-full text-white hover:bg-red-500/20 hover:border-red-500 hover:text-red-500 transition-all shadow-lg group"
+          >
+            <RotateCcw className="w-5 h-5 group-hover:-rotate-180 transition-transform duration-500" />
+          </button>
+        )}
 
       <MapContainer
         center={[
@@ -820,8 +820,9 @@ export default function MapCore() {
         }
       >
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url={`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(process.env.NEXT_PUBLIC_CARTO_API_KEY ?? '')}`}
           noWrap={false}
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>'
         />
 
         <MapController
@@ -861,17 +862,17 @@ export default function MapCore() {
                 const isActive =
                   Boolean(
                     iso &&
-                      activeIsoCodes.includes(
-                        iso,
-                      ),
+                    activeIsoCodes.includes(
+                      iso,
+                    ),
                   );
 
                 const isVulnerable =
                   Boolean(
                     iso &&
-                      vulnerableIsoCodes.includes(
-                        iso,
-                      ),
+                    vulnerableIsoCodes.includes(
+                      iso,
+                    ),
                   );
 
                 if (
@@ -959,9 +960,9 @@ export default function MapCore() {
         {/* EMERGENCY / RESILIENCE RADAR */}
         {(
           activeTab ===
-            'emergency' ||
+          'emergency' ||
           activeTab ===
-            'resilience'
+          'resilience'
         ) &&
           crisisZones.map(
             (zone) => (

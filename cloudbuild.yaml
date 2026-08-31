@@ -7,6 +7,8 @@ steps:
       - 'build'
       - '--build-arg'
       - 'GOOGLE_CLOUD_PROJECT_ID=$PROJECT_ID'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_CARTO_API_KEY=$_CARTO_API_KEY'
       - '-t'
       - 'gcr.io/$PROJECT_ID/chayra-ai-swarm:$COMMIT_SHA'
       - '.'
