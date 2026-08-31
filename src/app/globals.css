@@ -46,6 +46,20 @@ html {
   z-index: 999 !important;
 }
 
+.leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.55) !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+  font-size: 9px !important;
+  line-height: 1.2 !important;
+  padding: 2px 5px !important;
+  border-radius: 4px 0 0 0;
+  box-shadow: none !important;
+}
+
+.leaflet-control-attribution a {
+  color: rgba(147, 197, 253, 0.8) !important;
+}
+
 /* Hide scrollbar class for ActionPanel */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
