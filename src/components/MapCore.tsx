@@ -413,85 +413,90 @@ export default function MapCore() {
       countryCentroids,
     ]);
 
-  useEffect(() => {
-    fetch(
-      'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json',
-    )
-      .then((res) =>
-        res.json(),
-      )
-      .then((data) =>
-        setWorldGeoJson(data),
-      )
-      .catch((err) =>
-        console.error(
-          'GeoJSON load failed:',
-          err,
-        ),
-      );
+  
+useEffect(() => {
+  let cancelled = false;
+  let lastRadarFetchAt = 0;
 
-    const fetchRadarData =
-      async () => {
-        try {
-          setCrisisZones(
-            (prev) => {
-              if (
-                prev.length === 0
-              ) {
-                setIsLoading(
-                  true,
-                );
-              }
+  // Load world GeoJSON once.
+  fetch(
+    'https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json',
+  )
+    .then((res) => {
+      if (!res.ok) {
+        throw new Error(`GeoJSON HTTP ${res.status}`);
+      }
+      return res.json();
+    })
+    .then((data) => {
+      if (!cancelled) {
+        setWorldGeoJson(data);
+      }
+    })
+    .catch((error) => {
+      console.error('[Map]: GeoJSON load failed:', error);
+    });
 
-              return prev;
-            },
-          );
+  // Read the saved daily snapshot from DynamoDB.
+  const fetchRadarData = async () => {
+    lastRadarFetchAt = Date.now();
 
-          const response =
-            await fetch(
-              '/api/background-radar',
-            );
+    try {
+      const response = await fetch('/api/background-radar', {
+        method: 'GET',
+        cache: 'no-store',
+      });
 
-          if (
-            response.ok
-          ) {
-            const data =
-              await response.json();
+      if (!response.ok) {
+        throw new Error(`Radar API HTTP ${response.status}`);
+      }
 
-            if (
-              data.success &&
-              data.threats
-            ) {
-              setCrisisZones(
-                data.threats,
-              );
-            }
-          }
-        } catch (error) {
-          console.error(
-            'Radar Sync Failed:',
-            error,
-          );
-        } finally {
-          setIsLoading(
-            false,
-          );
-        }
-      };
+      const data = await response.json();
 
-    fetchRadarData();
+      if (cancelled) return;
 
-    const radarInterval =
-      setInterval(
-        fetchRadarData,
-        15000,
-      );
+      if (data.success && Array.isArray(data.threats)) {
+        setCrisisZones(data.threats);
+      }
+    } catch (error) {
+      console.error('[Map]: Radar snapshot retrieval failed:', error);
+    } finally {
+      if (!cancelled) {
+        setIsLoading(false);
+      }
+    }
+  };
 
-    return () =>
-      clearInterval(
-        radarInterval,
-      );
-  }, []);
+  // Initial snapshot load.
+  void fetchRadarData();
+
+  // Revalidate when returning to the page after one hour.
+  const handleVisibilityChange = () => {
+    const oneHour = 60 * 60 * 1000;
+
+    if (
+      document.visibilityState === 'visible' &&
+      Date.now() - lastRadarFetchAt >= oneHour
+    ) {
+      void fetchRadarData();
+    }
+  };
+
+  document.addEventListener(
+    'visibilitychange',
+    handleVisibilityChange,
+  );
+
+  return () => {
+    cancelled = true;
+
+    document.removeEventListener(
+      'visibilitychange',
+      handleVisibilityChange,
+    );
+  };
+}, []);
+
 
   useEffect(() => {
     const handleEnablePinDrop =

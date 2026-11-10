@@ -22,12 +22,12 @@ export default function HelpBar() {
     const logs = [
       "🛡️ [MindGuard]: Scanning intent for threats...",
       "🕵️‍♂️ [Scavenger]: Extracting emergency context...",
-      "📡 [Radar]: Scanning perimeter for active crisis...",
+      "📡 [Radar]: Loading saved daily threat snapshot...",
       "⚕️ [Medical]: Analyzing trauma context...",
       "🗺️ [Navigator]: Executing DUAL-SCAN routing...",
       "🛡️ [Vault]: Securing identity beacon...",
       "⚖️ [Verifier]: Cross-referencing intel...",
-      "✅ [System]: MEMORY BANK SYNCED TO FIRESTORE..."
+      "✅ [Memory]: MEMORY BANK SYNCED TO DYNAMODB..."
     ];
     let step = 0;
     setLiveAgentLog(logs[0]);
@@ -203,7 +203,7 @@ export default function HelpBar() {
       setLatency(Math.round(endTime - startTime));
 
       if (data.type === 'success' || data.type === 'spam') {
-        setChatLog({ role: 'ai', text: data.type === 'spam' ? `[MINDGUARD BLOCKED]: ${data.message}` : "Swarm execution complete. Data injected to tactical panels.", brain: "Google ADK Enterprise", circuitTripped: null });
+        setChatLog({ role: 'ai', text: data.type === 'spam' ? `[MINDGUARD BLOCKED]: ${data.message}` : "Swarm execution complete. Data injected to tactical panels.", brain: "ChayRa Multi-Provider Brain", circuitTripped: null });
 
         if (data.type === 'success') {
           // MAPPING THE NEW BACKEND DATA TO THE ACTION PANEL
@@ -353,7 +353,7 @@ export default function HelpBar() {
                   <Cpu className="w-3.5 h-3.5" /> SYSTEM BRAIN
                 </span>
                 <span className="text-[10px] font-mono text-gray-300 mt-1">
-                  {isProcessing ? '⚡ EXECUTING SWARM...' : `Primary: ${chatLog.brain || 'Google ADK'}`}
+                  {isProcessing ? '⚡ EXECUTING SWARM...' : `Primary: ${chatLog.brain || 'Brain Gateway'}`}
                 </span>
                 {chatLog.circuitTripped && !isProcessing && (
                   <span className="text-[9px] font-mono text-amber-400 mt-1 flex items-start gap-1 bg-amber-500/10 p-1 rounded border border-amber-500/20">

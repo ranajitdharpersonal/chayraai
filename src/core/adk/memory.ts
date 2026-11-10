@@ -35,15 +35,16 @@ function getSessionKey(sessionId: string) {
 // PUBLIC HEALTH MEMORY TYPES
 // ============================================================
 
+
 export interface PublicHealthMemoryState {
   analysisTimestamp?: string;
   source?: string;
 
   sourceStatus?:
-    | 'AVAILABLE'
-    | 'NO_CURRENT_RECORDS'
-    | 'PARTIAL'
-    | 'UNAVAILABLE';
+  | 'AVAILABLE'
+  | 'NO_CURRENT_RECORDS'
+  | 'PARTIAL'
+  | 'UNAVAILABLE';
 
   healthAdvisory?: string;
   officialAlerts?: unknown[];
@@ -52,7 +53,24 @@ export interface PublicHealthMemoryState {
   forecastWindow?: string;
   lastUpdated?: unknown;
   systemVersion?: string;
+
+  metadata?: {
+    analysisTimestamp?: string;
+    source?: string;
+    sourceStatus?:
+    | 'AVAILABLE'
+    | 'NO_CURRENT_RECORDS'
+    | 'PARTIAL'
+    | 'UNAVAILABLE';
+
+    snapshotStatus?: 'LIVE' | 'LAST_KNOWN_GOOD' | 'NO_DATA';
+    snapshotAgeDays?: number | null;
+    verificationPolicy?: string;
+    forecastWindow?: string;
+    lookbackDays?: number;
+  };
 }
+
 
 // ============================================================
 // PREDICTIVE MEMORY BANK
@@ -182,18 +200,44 @@ export class PredictiveMemoryBank {
     try {
       const client = getDynamoDocumentClient();
 
+
+      const metadata = data.metadata ?? {};
+
+      const analysisTimestamp =
+        metadata.analysisTimestamp ||
+        data.analysisTimestamp ||
+        new Date().toISOString();
+
+      const source =
+        metadata.source ||
+        data.source ||
+        'WHO Disease Outbreak News + UN ReliefWeb';
+
+      const sourceStatus =
+        metadata.sourceStatus ||
+        data.sourceStatus ||
+        'UNAVAILABLE';
+
+      const verificationPolicy =
+        metadata.verificationPolicy ||
+        data.verificationPolicy ||
+        'Official source records are separated from model inference.';
+
+      const forecastWindow =
+        metadata.forecastWindow ||
+        data.forecastWindow ||
+        '15 days';
+
+      const lastUpdated = new Date().toISOString();
+
       const item = {
         pk: PUBLIC_HEALTH_PK,
         sk: PUBLIC_HEALTH_SK,
 
-        analysisTimestamp:
-          data.analysisTimestamp || new Date().toISOString(),
-
-        source:
-          data.source || 'UN ReliefWeb',
-
-        sourceStatus:
-          data.sourceStatus || 'UNAVAILABLE',
+        // Flattened fields preserve compatibility with existing callers.
+        analysisTimestamp,
+        source,
+        sourceStatus,
 
         healthAdvisory:
           data.healthAdvisory || 'No advisory available.',
@@ -204,16 +248,23 @@ export class PredictiveMemoryBank {
         outbreakReports:
           data.outbreakReports || [],
 
-        verificationPolicy:
-          data.verificationPolicy ||
-          'Official source records are separated from model inference.',
-
-        forecastWindow:
-          data.forecastWindow || '15 days',
+        verificationPolicy,
+        forecastWindow,
 
         systemVersion: '3.0.0',
-        lastUpdated: new Date().toISOString(),
+        lastUpdated,
+
+        // Preserve the complete UI metadata object.
+        metadata: {
+          ...metadata,
+          analysisTimestamp,
+          source,
+          sourceStatus,
+          verificationPolicy,
+          forecastWindow,
+        },
       };
+
 
       await client.send(
         new PutCommand({
@@ -294,7 +345,7 @@ export class PredictiveMemoryBank {
       const generativeModel = vertexAI.getGenerativeModel({
         model:
           process.env.PREDICTIVE_MEMORY_MODEL ||
-          'gemini-3.5-flash',
+          'gemini-3.8-flash',
       });
 
       const prompt = `

@@ -1,7 +1,7 @@
 import { EnterpriseAgentRegistry, vertexAI } from '../adk/registry';
 import { PredictiveMemoryBank } from '../adk/memory';
 
-const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
+const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
 
 interface OfficialAlert {
   id: string;

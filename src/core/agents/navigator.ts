@@ -4,7 +4,7 @@ import {
 } from '../adk/registry';
 
 const generativeModel = vertexAI.getGenerativeModel({
-  model: 'gemini-3.5-flash',
+  model: 'gemini-3.8-flash',
 });
 
 type LatLng = {

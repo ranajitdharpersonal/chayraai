@@ -131,7 +131,7 @@ export class ChayRaCrisisFleet extends BaseAgent {
   constructor() {
     const mindGuard = new ChayRaAgentAdapter(
       'MindGuard',
-      'Enterprise safety and Model Armor gateway.',
+      'Basic structural input validation; not a prompt-injection security filter.',
       'MindGuard',
     );
 
@@ -143,7 +143,7 @@ export class ChayRaCrisisFleet extends BaseAgent {
 
     const radar = new ChayRaAgentAdapter(
       'Radar',
-      'Fetches live global crisis intelligence.',
+      'Reads the latest saved daily global threat snapshot.',
       'Radar',
     );
 
