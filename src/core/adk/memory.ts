@@ -17,16 +17,26 @@ import { generateText } from '../brain/brain';
 // ============================================================
 
 const SESSION_SORT_KEY = 'STATE';
+
 const PUBLIC_HEALTH_PK = 'PUBLIC_HEALTH';
 const PUBLIC_HEALTH_SK = 'GLOBAL_HEALTH_WATCH';
 
+const SESSION_TTL_SECONDS =
+  30 * 24 * 60 * 60;
+
 function getSessionKey(sessionId: string) {
-  if (!sessionId?.trim()) {
-    throw new Error('[Memory Bank]: A valid session ID is required.');
+  if (
+    typeof sessionId !== 'string' ||
+    !sessionId.trim() ||
+    sessionId.length > 128
+  ) {
+    throw new Error(
+      '[Memory Bank]: A valid session ID is required.',
+    );
   }
 
   return {
-    pk: `SESSION#${sessionId}`,
+    pk: `SESSION#${sessionId.trim()}`,
     sk: SESSION_SORT_KEY,
   };
 }
@@ -35,35 +45,42 @@ function getSessionKey(sessionId: string) {
 // PUBLIC HEALTH MEMORY TYPES
 // ============================================================
 
-
 export interface PublicHealthMemoryState {
   analysisTimestamp?: string;
   source?: string;
 
   sourceStatus?:
-  | 'AVAILABLE'
-  | 'NO_CURRENT_RECORDS'
-  | 'PARTIAL'
-  | 'UNAVAILABLE';
+    | 'AVAILABLE'
+    | 'NO_CURRENT_RECORDS'
+    | 'PARTIAL'
+    | 'UNAVAILABLE';
 
   healthAdvisory?: string;
+
   officialAlerts?: unknown[];
   outbreakReports?: unknown[];
+
   verificationPolicy?: string;
   forecastWindow?: string;
+
   lastUpdated?: unknown;
   systemVersion?: string;
 
   metadata?: {
     analysisTimestamp?: string;
     source?: string;
-    sourceStatus?:
-    | 'AVAILABLE'
-    | 'NO_CURRENT_RECORDS'
-    | 'PARTIAL'
-    | 'UNAVAILABLE';
 
-    snapshotStatus?: 'LIVE' | 'LAST_KNOWN_GOOD' | 'NO_DATA';
+    sourceStatus?:
+      | 'AVAILABLE'
+      | 'NO_CURRENT_RECORDS'
+      | 'PARTIAL'
+      | 'UNAVAILABLE';
+
+    snapshotStatus?:
+      | 'LIVE'
+      | 'LAST_KNOWN_GOOD'
+      | 'NO_DATA';
+
     snapshotAgeDays?: number | null;
     verificationPolicy?: string;
     forecastWindow?: string;
@@ -71,12 +88,12 @@ export interface PublicHealthMemoryState {
   };
 }
 
-
 // ============================================================
 // PREDICTIVE MEMORY BANK
 // ============================================================
 
 export class PredictiveMemoryBank {
+
   // ==========================================================
   // 1. SAVE ENTERPRISE SESSION STATE
   // ==========================================================
@@ -85,24 +102,38 @@ export class PredictiveMemoryBank {
     sessionId: string,
     data: any,
   ): Promise<void> {
+
     console.log(
-      `[Memory Bank]: Saving enterprise state to DynamoDB for session ${sessionId}...`,
+      `[Memory Bank]: Saving session ${sessionId} to DynamoDB...`,
     );
 
     try {
       const client = getDynamoDocumentClient();
+
       const tableName = getChayRaTableName();
+
       const key = getSessionKey(sessionId);
 
+      const now = new Date();
+
+      const timestamp = now.toISOString();
+
+      // DynamoDB TTL requires Unix epoch seconds.
+      const expiresAt =
+        Math.floor(now.getTime() / 1000) +
+        SESSION_TTL_SECONDS;
+
       const event = {
-        eventTime: new Date().toISOString(),
+        eventTime: timestamp,
         eventType: 'SWARM_CYCLE_COMPLETE',
+
         agentsDeployed: [
           'MindGuard',
           'Scavenger',
           'Radar',
           'Medical',
           'Navigator',
+          'PublicHealth',
           'Vault',
           'Verifier',
         ],
@@ -111,6 +142,7 @@ export class PredictiveMemoryBank {
       await client.send(
         new UpdateCommand({
           TableName: tableName,
+
           Key: key,
 
           UpdateExpression: `
@@ -119,6 +151,7 @@ export class PredictiveMemoryBank {
                 activeIntel = :activeIntel,
                 systemVersion = :systemVersion,
                 lastUpdated = :lastUpdated,
+                expiresAt = :expiresAt,
                 eventLog = list_append(
                   if_not_exists(eventLog, :emptyList),
                   :newEvent
@@ -126,29 +159,49 @@ export class PredictiveMemoryBank {
           `,
 
           ExpressionAttributeValues: {
-            ':situationContext': data?.lastInput || 'UNKNOWN',
-            ':threatLevel': data?.threatLevel || 'LOW',
-            ':activeIntel': data?.intel || 'NONE',
-            ':systemVersion': '3.0.0',
-            ':lastUpdated': new Date().toISOString(),
-            ':emptyList': [],
-            ':newEvent': [event],
+            ':situationContext':
+              data?.lastInput || 'UNKNOWN',
+
+            ':threatLevel':
+              data?.threatLevel || 'LOW',
+
+            ':activeIntel':
+              data?.intel || 'NONE',
+
+            ':systemVersion':
+              '3.0.0',
+
+            ':lastUpdated':
+              timestamp,
+
+            ':expiresAt':
+              expiresAt,
+
+            ':emptyList':
+              [],
+
+            ':newEvent':
+              [event],
           },
         }),
       );
 
       console.log(
-        '[Memory Bank]: Enterprise session state saved to DynamoDB.',
+        '[Memory Bank]: Session state persisted successfully.',
       );
+
     } catch (error) {
+
+      // IMPORTANT:
+      // Persistence failure must not destroy an otherwise
+      // successful emergency response.
+
       console.error(
-        '[Memory Bank]: Critical DynamoDB sync failure.',
+        '[Memory Bank]: DynamoDB session persistence failed. Continuing without durable memory.',
         error,
       );
 
-      throw new Error(
-        'Enterprise database connection failed. Please verify AWS DynamoDB configuration.',
-      );
+      return;
     }
   }
 
@@ -159,8 +212,9 @@ export class PredictiveMemoryBank {
   static async getSituationHistory(
     sessionId: string,
   ): Promise<Record<string, any> | null> {
+
     console.log(
-      `[Memory Bank]: Retrieving historical threat data for ${sessionId}...`,
+      `[Memory Bank]: Retrieving history for ${sessionId}...`,
     );
 
     try {
@@ -169,14 +223,38 @@ export class PredictiveMemoryBank {
       const result = await client.send(
         new GetCommand({
           TableName: getChayRaTableName(),
+
           Key: getSessionKey(sessionId),
         }),
       );
 
-      return (
-        (result.Item as Record<string, any> | undefined) ?? null
-      );
+      const item = result.Item as
+        | Record<string, any>
+        | undefined;
+
+      if (!item) {
+        return null;
+      }
+
+      // Application-level expiration check.
+      // DynamoDB TTL deletion itself is asynchronous.
+
+      if (
+        typeof item.expiresAt === 'number' &&
+        item.expiresAt <=
+          Math.floor(Date.now() / 1000)
+      ) {
+        console.log(
+          '[Memory Bank]: Session history has expired.',
+        );
+
+        return null;
+      }
+
+      return item;
+
     } catch (error) {
+
       console.error(
         '[Memory Bank]: Historical retrieval failed.',
         error,
@@ -193,15 +271,16 @@ export class PredictiveMemoryBank {
   static async savePublicHealthState(
     data: PublicHealthMemoryState,
   ): Promise<void> {
+
     console.log(
-      '[Memory Bank]: Persisting public-health intelligence to DynamoDB...',
+      '[Memory Bank]: Persisting public-health intelligence...',
     );
 
     try {
       const client = getDynamoDocumentClient();
 
-
-      const metadata = data.metadata ?? {};
+      const metadata =
+        data.metadata ?? {};
 
       const analysisTimestamp =
         metadata.analysisTimestamp ||
@@ -228,19 +307,23 @@ export class PredictiveMemoryBank {
         data.forecastWindow ||
         '15 days';
 
-      const lastUpdated = new Date().toISOString();
+      const lastUpdated =
+        new Date().toISOString();
 
       const item = {
         pk: PUBLIC_HEALTH_PK,
         sk: PUBLIC_HEALTH_SK,
 
-        // Flattened fields preserve compatibility with existing callers.
+        // Flattened fields preserve compatibility with
+        // existing API routes and older UI consumers.
+
         analysisTimestamp,
         source,
         sourceStatus,
 
         healthAdvisory:
-          data.healthAdvisory || 'No advisory available.',
+          data.healthAdvisory ||
+          'No advisory available.',
 
         officialAlerts:
           data.officialAlerts || [],
@@ -252,11 +335,14 @@ export class PredictiveMemoryBank {
         forecastWindow,
 
         systemVersion: '3.0.0',
+
         lastUpdated,
 
-        // Preserve the complete UI metadata object.
+        // Preserve the complete metadata object.
+
         metadata: {
           ...metadata,
+
           analysisTimestamp,
           source,
           sourceStatus,
@@ -265,22 +351,27 @@ export class PredictiveMemoryBank {
         },
       };
 
-
       await client.send(
         new PutCommand({
           TableName: getChayRaTableName(),
+
           Item: item,
         }),
       );
 
       console.log(
-        '[Memory Bank]: Public-health intelligence persisted to DynamoDB.',
+        '[Memory Bank]: Public-health state persisted successfully.',
       );
+
     } catch (error) {
+
       console.error(
         '[Memory Bank]: Public-health persistence failed.',
         error,
       );
+
+      // Health persistence must not crash the main API.
+      return;
     }
   }
 
@@ -291,8 +382,9 @@ export class PredictiveMemoryBank {
   static async getPublicHealthState(): Promise<
     PublicHealthMemoryState | null
   > {
+
     console.log(
-      '[Memory Bank]: Retrieving public-health memory from DynamoDB...',
+      '[Memory Bank]: Retrieving public-health snapshot...',
     );
 
     try {
@@ -301,6 +393,7 @@ export class PredictiveMemoryBank {
       const result = await client.send(
         new GetCommand({
           TableName: getChayRaTableName(),
+
           Key: {
             pk: PUBLIC_HEALTH_PK,
             sk: PUBLIC_HEALTH_SK,
@@ -313,7 +406,9 @@ export class PredictiveMemoryBank {
       }
 
       return result.Item as PublicHealthMemoryState;
+
     } catch (error) {
+
       console.error(
         '[Memory Bank]: Public-health retrieval failed.',
         error,
@@ -330,14 +425,18 @@ export class PredictiveMemoryBank {
   static async predictThreatEvolution(
     sessionId: string,
   ): Promise<string> {
+
     console.log(
-      '[Memory Bank]: Analyzing historical state for prediction...',
+      '[Memory Bank]: Analyzing historical state...',
     );
 
-    const history = await this.getSituationHistory(sessionId);
+    const history =
+      await this.getSituationHistory(sessionId);
 
     if (!history) {
-      return 'Insufficient historical data to generate resilience insights.';
+      return (
+        'Insufficient historical data to generate resilience insights.'
+      );
     }
 
     try {
@@ -345,9 +444,11 @@ export class PredictiveMemoryBank {
       const prompt = `
 You are the Predictive Memory Engine for an Enterprise Crisis Fleet.
 
-Analyze the following saved situation history and predict the next likely threat evolution within 24 hours.
+Analyze the following saved situation history and predict
+the next likely threat evolution within 24 hours.
 
-Keep the output to 2 concise sentences, focusing on preparedness.
+Keep the output to 2 concise sentences,
+focusing on preparedness.
 
 Do not present speculation as verified fact.
 
@@ -356,7 +457,9 @@ ${JSON.stringify(history)}
 `;
 
       return await generateText(prompt);
+
     } catch (error) {
+
       console.error(
         '[Memory Bank]: Prediction generation failed.',
         error,
