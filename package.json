@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@google-cloud/modelarmor": "^0.7.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1164.0",
+    "@aws-sdk/client-dynamodb": "^3.1164.0",
+    "@aws-sdk/lib-dynamodb": "^3.1164.0",
     "@google-cloud/opentelemetry-cloud-trace-exporter": "^3.0.0",
     "@google/adk": "^1.6.0",
     "@google/genai": "^2.16.0",

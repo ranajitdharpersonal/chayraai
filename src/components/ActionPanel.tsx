@@ -38,9 +38,9 @@ export default function ActionPanel() {
 
     resiliencePrediction: "Insufficient historical data for accurate threat prediction. Awaiting crisis trigger.",
     syncStatus: {
-       nasa: false,
-       usgs: false,
-       un: false
+      nasa: false,
+      usgs: false,
+      un: false
     }
   });
 
@@ -48,15 +48,18 @@ export default function ActionPanel() {
     const handleIntelUpdate = (event: any) => {
       if (event.detail) {
         const isNasaSynced = event.detail.intel?.includes("NASA") || false;
-        const isUsgsSynced = event.detail.intel?.includes("SEISMIC") || false;
+        const isUsgsSynced =
+          event.detail.intel?.includes("USGS") ||
+          event.detail.intel?.includes("SEISMIC") ||
+          false;
         const isUnSynced =
           (event.detail.officialAlerts && event.detail.officialAlerts.length > 0) ||
           (event.detail.outbreakReports && event.detail.outbreakReports.length > 0);
 
         setPanelData(prev => ({
-            ...prev,
-            ...event.detail,
-            syncStatus: { nasa: isNasaSynced, usgs: isUsgsSynced, un: isUnSynced }
+          ...prev,
+          ...event.detail,
+          syncStatus: { nasa: isNasaSynced, usgs: isUsgsSynced, un: isUnSynced }
         }));
 
         if (event.detail.threatLevel === 'CRITICAL' || event.detail.threatLevel === 'HIGH') {
@@ -74,7 +77,7 @@ export default function ActionPanel() {
     setIsHealthLoading(true);
 
     try {
-      const res = await fetch('/api/public-health?refresh=1', {
+      const res = await fetch('/api/public-health', {
         method: 'GET',
         cache: 'no-store',
       });
@@ -154,7 +157,7 @@ export default function ActionPanel() {
       });
       const data = await res.json();
       if (data.evidence) {
-         setPanelData(prev => ({ ...prev, evidence: data.evidence }));
+        setPanelData(prev => ({ ...prev, evidence: data.evidence }));
       }
     } catch (e) {
       console.error("Verification failed:", e);
@@ -215,7 +218,7 @@ export default function ActionPanel() {
             <div className="col-span-2 bg-[#0a0714]/80 backdrop-blur-md border border-violet-500/10 rounded-[20px] md:rounded-[26px] p-2.5 md:p-4 flex flex-col gap-2 md:gap-3 relative overflow-hidden shadow-lg">
               <div className="flex items-center gap-2 mb-1 border-b border-white/5 pb-2">
                 <Activity className="w-4 h-4 text-violet-400" />
-                <span className="text-[10px] md:text-xs font-semibold text-violet-300 tracking-[0.12em] md:tracking-widest uppercase">Live Telemetry</span>
+                <span className="text-[10px] md:text-xs font-semibold text-violet-300 tracking-[0.12em] md:tracking-widest uppercase">SYSTEM TELEMETRY</span>
               </div>
 
               <div className="flex items-center gap-2.5 md:gap-4">
@@ -239,23 +242,23 @@ export default function ActionPanel() {
                 <div className="flex flex-col gap-1.5 text-[10px] md:text-[11px] flex-1">
                   <div className="flex items-center justify-between text-gray-300">
                     <span className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" /> MindGuard secure
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" /> MindGuard validation
                     </span>
-                    <span className="text-emerald-500 font-mono">✓ 0.3s</span>
+                    <span className="text-emerald-500 font-mono">✓ BASIC CHECK</span>
                   </div>
 
                   <div className="flex items-center justify-between text-gray-300">
                     <span className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Radar sync
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Radar snapshot
                     </span>
-                    <span className="text-emerald-500 font-mono">✓ 1.2s</span>
+                    <span className="text-emerald-500 font-mono">✓ CACHED DATA</span>
                   </div>
 
                   <div className="flex items-center justify-between text-gray-300">
                     <span className="flex items-center gap-2">
-                      <Server className="w-3 h-3 text-violet-400" /> Firestore DB
+                      <Server className="w-3 h-3 text-violet-400" /> DynamoDB
                     </span>
-                    <span className="text-violet-300 font-mono">✓ 0.4s</span>
+                    <span className="text-violet-300 font-mono">PERSISTENT</span>
                   </div>
                 </div>
               </div>
@@ -300,7 +303,7 @@ export default function ActionPanel() {
                   <div className="p-1.5 bg-blue-500/15 rounded-lg">
                     <Network className="w-3.5 h-3.5 text-blue-300" />
                   </div>
-                  <h3 className="text-[9px] font-bold text-blue-300 tracking-widest">LIVE SOURCES</h3>
+                  <h3 className="text-[9px] font-bold text-blue-300 tracking-widest">SNAPSHOT EVENTS</h3>
                 </div>
 
                 <div className="bg-black/40 p-2 rounded-xl text-[9px] flex-1 flex flex-col justify-center gap-1 font-mono uppercase">
@@ -479,7 +482,7 @@ export default function ActionPanel() {
                 </div>
 
                 <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded-full border border-emerald-500/20 font-mono animate-pulse">
-                  FIRESTORE SYNCED
+                  MEMORY STORE
                 </span>
               </div>
 
@@ -519,59 +522,59 @@ export default function ActionPanel() {
 
       {/* 🛑 THE VERIFIER / GROUND TRUTH INTEL (Moved and Pinned to Bottom!) */}
       <div className="mt-2 md:mt-3 bg-[#0a0714]/90 backdrop-blur-2xl border border-white/5 rounded-[18px] md:rounded-[22px] p-2 md:p-3 shadow-2xl relative overflow-hidden group hover:border-white/10 transition-colors shrink-0">
-          <div className={`absolute left-0 top-0 w-1.5 h-full transition-colors duration-500 ${!panelData.evidence ? 'bg-gray-600' : panelData.evidence.isVerified ? 'bg-emerald-500 shadow-[0_0_15px_#22c55e]' : 'bg-red-500 shadow-[0_0_15px_#ef4444]'}`}></div>
+        <div className={`absolute left-0 top-0 w-1.5 h-full transition-colors duration-500 ${!panelData.evidence ? 'bg-gray-600' : panelData.evidence.isVerified ? 'bg-emerald-500 shadow-[0_0_15px_#22c55e]' : 'bg-red-500 shadow-[0_0_15px_#ef4444]'}`}></div>
 
-          <div className="flex justify-between items-center mb-2 pl-2">
-            <span className="text-[10.5px] font-bold text-gray-300 flex items-center gap-1.5 uppercase tracking-widest">
-              <Database className={`w-3.5 h-3.5 ${panelData.evidence ? 'text-emerald-400' : 'text-gray-400'}`} /> TRUTH VERIFIER
-            </span>
+        <div className="flex justify-between items-center mb-2 pl-2">
+          <span className="text-[10.5px] font-bold text-gray-300 flex items-center gap-1.5 uppercase tracking-widest">
+            <Database className={`w-3.5 h-3.5 ${panelData.evidence ? 'text-emerald-400' : 'text-gray-400'}`} /> TRUTH VERIFIER
+          </span>
 
-            <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${!panelData.evidence ? 'bg-gray-500/15 text-gray-400 border border-gray-500/30' : panelData.evidence.isVerified ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/15 text-red-400 border border-red-500/30'}`}>
-              {!panelData.evidence ? 'STANDBY' : panelData.evidence.isVerified ? 'VERIFIED' : 'CONFLICT DETECTED'}
-            </span>
-          </div>
+          <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${!panelData.evidence ? 'bg-gray-500/15 text-gray-400 border border-gray-500/30' : panelData.evidence.isVerified ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/15 text-red-400 border border-red-500/30'}`}>
+            {!panelData.evidence ? 'STANDBY' : panelData.evidence.isVerified ? 'VERIFIED' : 'CONFLICT DETECTED'}
+          </span>
+        </div>
 
-          {/* Manual Fact Check Input */}
-          <div className="pl-2 mb-2 flex gap-2">
-            <input
-              type="text"
-              placeholder="Enter a claim to manually verify..."
-              value={manualFact}
-              onChange={(e) => setManualFact(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleManualVerify()}
-              className="flex-1 bg-black/40 border border-white/10 rounded-lg text-[10px] px-3 py-1.5 text-gray-300 focus:outline-none focus:border-emerald-500/50 transition-colors placeholder:text-gray-600"
-            />
+        {/* Manual Fact Check Input */}
+        <div className="pl-2 mb-2 flex gap-2">
+          <input
+            type="text"
+            placeholder="Enter a claim to manually verify..."
+            value={manualFact}
+            onChange={(e) => setManualFact(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleManualVerify()}
+            className="flex-1 bg-black/40 border border-white/10 rounded-lg text-[10px] px-3 py-1.5 text-gray-300 focus:outline-none focus:border-emerald-500/50 transition-colors placeholder:text-gray-600"
+          />
 
-            <button
-              onClick={handleManualVerify}
-              disabled={isVerifying || !manualFact.trim()}
-              className="bg-emerald-500/15 text-emerald-400 px-3 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors disabled:opacity-50 flex items-center justify-center"
-            >
-              {isVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-            </button>
-          </div>
+          <button
+            onClick={handleManualVerify}
+            disabled={isVerifying || !manualFact.trim()}
+            className="bg-emerald-500/15 text-emerald-400 px-3 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors disabled:opacity-50 flex items-center justify-center"
+          >
+            {isVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+          </button>
+        </div>
 
-          {/* Results Display */}
-          <div className="pl-2 text-[11px] text-gray-300 font-mono leading-relaxed">
-            {panelData.evidence ? (
-              <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                <p>
-                  <span className="text-gray-500 uppercase tracking-wider">Source:</span>
-                  {' '}
-                  <span className="text-blue-300">{panelData.evidence.source}</span>
-                </p>
-                <p>
-                  <span className="text-gray-500 uppercase tracking-wider">Evidence:</span>
-                  {' '}
-                  {panelData.evidence.confidenceReason}
-                </p>
-              </div>
-            ) : (
-              <p className="text-gray-600 text-[9px] italic mt-1">
-                Awaiting swarm data or manual input for cross-checking...
+        {/* Results Display */}
+        <div className="pl-2 text-[11px] text-gray-300 font-mono leading-relaxed">
+          {panelData.evidence ? (
+            <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
+              <p>
+                <span className="text-gray-500 uppercase tracking-wider">Source:</span>
+                {' '}
+                <span className="text-blue-300">{panelData.evidence.source}</span>
               </p>
-            )}
-          </div>
+              <p>
+                <span className="text-gray-500 uppercase tracking-wider">Evidence:</span>
+                {' '}
+                {panelData.evidence.confidenceReason}
+              </p>
+            </div>
+          ) : (
+            <p className="text-gray-600 text-[9px] italic mt-1">
+              Awaiting swarm data or manual input for cross-checking...
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

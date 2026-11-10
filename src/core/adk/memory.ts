@@ -1,95 +1,35 @@
-import {
-  getApps,
-  initializeApp,
-  getApp,
-  cert,
-} from 'firebase-admin/app';
 
 import {
-  getFirestore,
-  FieldValue,
-  type Firestore,
-} from 'firebase-admin/firestore';
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
+
+import {
+  getChayRaTableName,
+  getDynamoDocumentClient,
+} from '../aws/dynamo';
 
 import { vertexAI } from './registry';
 
 // ============================================================
-// FIREBASE / FIRESTORE INITIALIZATION
+// DYNAMODB KEY CONFIGURATION
 // ============================================================
 
-const projectId =
-  process.env.GOOGLE_CLOUD_PROJECT_ID ||
-  process.env.GOOGLE_CLOUD_PROJECT;
+const SESSION_SORT_KEY = 'STATE';
+const PUBLIC_HEALTH_PK = 'PUBLIC_HEALTH';
+const PUBLIC_HEALTH_SK = 'GLOBAL_HEALTH_WATCH';
 
-const clientEmail =
-  process.env.GOOGLE_CLIENT_EMAIL?.trim();
-
-const privateKey =
-  process.env.GOOGLE_PRIVATE_KEY?.replace(
-    /\\n/g,
-    '\n',
-  );
-
-let dbInstance:
-  | Firestore
-  | null = null;
-
-/**
- * Initialise Firestore lazily.
- *
- * Next.js may import this module while collecting route
- * configuration during `next build`. Credentials are not
- * guaranteed to exist inside the Docker build stage.
- *
- * We therefore do not initialise Firebase Admin or validate
- * service-account credentials at module import time.
- *
- * Runtime:
- * - explicit GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY -> cert()
- * - otherwise -> Application Default Credentials (ADC)
- */
-function getDb(): Firestore {
-  if (dbInstance) {
-    return dbInstance;
+function getSessionKey(sessionId: string) {
+  if (!sessionId?.trim()) {
+    throw new Error('[Memory Bank]: A valid session ID is required.');
   }
 
-  if (!projectId) {
-    throw new Error(
-      '[Memory Bank]: Missing Google Cloud project configuration.',
-    );
-  }
-
-  if (!getApps().length) {
-    if (clientEmail && privateKey) {
-      initializeApp({
-        credential: cert({
-          projectId,
-          clientEmail,
-          privateKey,
-        }),
-      });
-    } else {
-      initializeApp({
-        projectId,
-      });
-    }
-  }
-
-  dbInstance = getFirestore(
-    getApp(),
-  );
-
-  return dbInstance;
+  return {
+    pk: `SESSION#${sessionId}`,
+    sk: SESSION_SORT_KEY,
+  };
 }
-
-// ============================================================
-// GEMINI 3.5 FLASH — PREDICTIVE MEMORY ENGINE
-// ============================================================
-
-const generativeModel =
-  vertexAI.getGenerativeModel({
-    model: 'gemini-3.5-flash',
-  });
 
 // ============================================================
 // PUBLIC HEALTH MEMORY TYPES
@@ -97,7 +37,6 @@ const generativeModel =
 
 export interface PublicHealthMemoryState {
   analysisTimestamp?: string;
-
   source?: string;
 
   sourceStatus?:
@@ -107,17 +46,11 @@ export interface PublicHealthMemoryState {
     | 'UNAVAILABLE';
 
   healthAdvisory?: string;
-
   officialAlerts?: unknown[];
-
   outbreakReports?: unknown[];
-
   verificationPolicy?: string;
-
   forecastWindow?: string;
-
   lastUpdated?: unknown;
-
   systemVersion?: string;
 }
 
@@ -127,7 +60,7 @@ export interface PublicHealthMemoryState {
 
 export class PredictiveMemoryBank {
   // ==========================================================
-  // 1. ENTERPRISE SESSION STATE
+  // 1. SAVE ENTERPRISE SESSION STATE
   // ==========================================================
 
   static async saveSituationState(
@@ -135,102 +68,99 @@ export class PredictiveMemoryBank {
     data: any,
   ): Promise<void> {
     console.log(
-      `[Memory Bank]: Committing enterprise state to Firestore for session ${sessionId}...`,
+      `[Memory Bank]: Saving enterprise state to DynamoDB for session ${sessionId}...`,
     );
 
     try {
-      const db = getDb();
+      const client = getDynamoDocumentClient();
+      const tableName = getChayRaTableName();
+      const key = getSessionKey(sessionId);
 
-      const docRef = db
-        .collection(
-          'chayra_enterprise_memory',
-        )
-        .doc(sessionId);
+      const event = {
+        eventTime: new Date().toISOString(),
+        eventType: 'SWARM_CYCLE_COMPLETE',
+        agentsDeployed: [
+          'MindGuard',
+          'Scavenger',
+          'Radar',
+          'Medical',
+          'Navigator',
+          'Vault',
+          'Verifier',
+        ],
+      };
 
-      await docRef.set(
-        {
-          situationContext:
-            data.lastInput ||
-            'UNKNOWN',
+      await client.send(
+        new UpdateCommand({
+          TableName: tableName,
+          Key: key,
 
-          threatLevel:
-            data.threatLevel ||
-            'LOW',
+          UpdateExpression: `
+            SET situationContext = :situationContext,
+                threatLevel = :threatLevel,
+                activeIntel = :activeIntel,
+                systemVersion = :systemVersion,
+                lastUpdated = :lastUpdated,
+                eventLog = list_append(
+                  if_not_exists(eventLog, :emptyList),
+                  :newEvent
+                )
+          `,
 
-          activeIntel:
-            data.intel ||
-            'NONE',
+          ExpressionAttributeValues: {
+            ':situationContext': data?.lastInput || 'UNKNOWN',
+            ':threatLevel': data?.threatLevel || 'LOW',
+            ':activeIntel': data?.intel || 'NONE',
+            ':systemVersion': '3.0.0',
+            ':lastUpdated': new Date().toISOString(),
+            ':emptyList': [],
+            ':newEvent': [event],
+          },
+        }),
+      );
 
-          systemVersion:
-            '3.0.0',
-
-          lastUpdated:
-            FieldValue.serverTimestamp(),
-
-          eventLog:
-            FieldValue.arrayUnion({
-              eventTime:
-                new Date().toISOString(),
-
-              eventType:
-                'SWARM_CYCLE_COMPLETE',
-
-              agentsDeployed: [
-                'MindGuard',
-                'Scavenger',
-                'Radar',
-                'Medical',
-                'Navigator',
-                'Vault',
-                'Verifier',
-              ],
-            }),
-        },
-        {
-          merge: true,
-        },
+      console.log(
+        '[Memory Bank]: Enterprise session state saved to DynamoDB.',
       );
     } catch (error) {
       console.error(
-        '[Memory Bank]: Critical DB Sync Failure.',
+        '[Memory Bank]: Critical DynamoDB sync failure.',
         error,
       );
 
       throw new Error(
-        'Enterprise Database Connection Failed. Please verify GCP Service Account.',
+        'Enterprise database connection failed. Please verify AWS DynamoDB configuration.',
       );
     }
   }
 
   // ==========================================================
-  // 2. HISTORICAL CRISIS RETRIEVAL
+  // 2. RETRIEVE HISTORICAL CRISIS STATE
   // ==========================================================
 
   static async getSituationHistory(
     sessionId: string,
-  ) {
+  ): Promise<Record<string, any> | null> {
     console.log(
       `[Memory Bank]: Retrieving historical threat data for ${sessionId}...`,
     );
 
     try {
-      const db = getDb();
+      const client = getDynamoDocumentClient();
 
-      const docRef = db
-        .collection(
-          'chayra_enterprise_memory',
-        )
-        .doc(sessionId);
+      const result = await client.send(
+        new GetCommand({
+          TableName: getChayRaTableName(),
+          Key: getSessionKey(sessionId),
+        }),
+      );
 
-      const doc =
-        await docRef.get();
-
-      return doc.exists
-        ? doc.data()
-        : null;
+      return (
+        (result.Item as Record<string, any> | undefined) ?? null
+      );
     } catch (error) {
       console.error(
-        '[Memory Bank]: Retrieval Failed.',
+        '[Memory Bank]: Historical retrieval failed.',
         error,
       );
 
@@ -239,74 +169,61 @@ export class PredictiveMemoryBank {
   }
 
   // ==========================================================
-  // 3. PUBLIC HEALTH STATE — PERSIST
+  // 3. SAVE PUBLIC HEALTH STATE
   // ==========================================================
 
   static async savePublicHealthState(
     data: PublicHealthMemoryState,
   ): Promise<void> {
     console.log(
-      '[Memory Bank]: Persisting public-health intelligence...',
+      '[Memory Bank]: Persisting public-health intelligence to DynamoDB...',
     );
 
     try {
-      const db = getDb();
+      const client = getDynamoDocumentClient();
 
-      const docRef = db
-        .collection(
-          'chayra_public_health_memory',
-        )
-        .doc(
-          'global_health_watch',
-        );
+      const item = {
+        pk: PUBLIC_HEALTH_PK,
+        sk: PUBLIC_HEALTH_SK,
 
-      await docRef.set(
-        {
-          analysisTimestamp:
-            data.analysisTimestamp ||
-            new Date().toISOString(),
+        analysisTimestamp:
+          data.analysisTimestamp || new Date().toISOString(),
 
-          source:
-            data.source ||
-            'UN ReliefWeb',
+        source:
+          data.source || 'UN ReliefWeb',
 
-          sourceStatus:
-            data.sourceStatus ||
-            'UNAVAILABLE',
+        sourceStatus:
+          data.sourceStatus || 'UNAVAILABLE',
 
-          healthAdvisory:
-            data.healthAdvisory ||
-            'No advisory available.',
+        healthAdvisory:
+          data.healthAdvisory || 'No advisory available.',
 
-          officialAlerts:
-            data.officialAlerts ||
-            [],
+        officialAlerts:
+          data.officialAlerts || [],
 
-          outbreakReports:
-            data.outbreakReports ||
-            [],
+        outbreakReports:
+          data.outbreakReports || [],
 
-          verificationPolicy:
-            data.verificationPolicy ||
-            'Official source records are separated from model inference.',
+        verificationPolicy:
+          data.verificationPolicy ||
+          'Official source records are separated from model inference.',
 
-          forecastWindow:
-            data.forecastWindow ||
-            '15 days',
+        forecastWindow:
+          data.forecastWindow || '15 days',
 
-          systemVersion:
-            '3.0.0',
+        systemVersion: '3.0.0',
+        lastUpdated: new Date().toISOString(),
+      };
 
-          lastUpdated:
-            FieldValue.serverTimestamp(),
-        },
-        {
-          merge: true,
-        },
+      await client.send(
+        new PutCommand({
+          TableName: getChayRaTableName(),
+          Item: item,
+        }),
       );
 
       console.log(
-        '[Memory Bank]: Public-health intelligence persisted.',
+        '[Memory Bank]: Public-health intelligence persisted to DynamoDB.',
       );
     } catch (error) {
       console.error(
@@ -317,38 +234,34 @@ export class PredictiveMemoryBank {
   }
 
   // ==========================================================
-  // 4. PUBLIC HEALTH STATE — RETRIEVE
+  // 4. RETRIEVE PUBLIC HEALTH STATE
   // ==========================================================
 
   static async getPublicHealthState(): Promise<
     PublicHealthMemoryState | null
   > {
     console.log(
-      '[Memory Bank]: Retrieving historical public-health state...',
+      '[Memory Bank]: Retrieving public-health memory from DynamoDB...',
     );
 
     try {
-      const db = getDb();
+      const client = getDynamoDocumentClient();
 
-      const docRef = db
-        .collection(
-          'chayra_public_health_memory',
-        )
-        .doc(
-          'global_health_watch',
-        );
+      const result = await client.send(
+        new GetCommand({
+          TableName: getChayRaTableName(),
+          Key: {
+            pk: PUBLIC_HEALTH_PK,
+            sk: PUBLIC_HEALTH_SK,
+          },
+        }),
+      );
 
-      const doc =
-        await docRef.get();
-
-      if (!doc.exists) {
+      if (!result.Item) {
         return null;
       }
 
-      return (
-        doc.data() as
-          PublicHealthMemoryState
-      );
+      return result.Item as PublicHealthMemoryState;
     } catch (error) {
       console.error(
         '[Memory Bank]: Public-health retrieval failed.',
@@ -370,18 +283,20 @@ export class PredictiveMemoryBank {
       '[Memory Bank]: Analyzing historical state for prediction...',
     );
 
-    const history =
-      await this.getSituationHistory(
-        sessionId,
-      );
+    const history = await this.getSituationHistory(sessionId);
 
     if (!history) {
-      return (
-        'Insufficient historical data to generate resilience insights.'
-      );
+      return 'Insufficient historical data to generate resilience insights.';
     }
 
     try {
+      // Inference is routed through the central Brain gateway.
+      const generativeModel = vertexAI.getGenerativeModel({
+        model:
+          process.env.PREDICTIVE_MEMORY_MODEL ||
+          'gemini-3.5-flash',
+      });
+
       const prompt = `
 You are the Predictive Memory Engine for an Enterprise Crisis Fleet.
 
@@ -389,20 +304,16 @@ Analyze the following saved situation history and predict the next likely threat
 
 Keep the output to 2 concise sentences, focusing on preparedness.
 
+Do not present speculation as verified fact.
+
 Situation History:
 ${JSON.stringify(history)}
 `;
 
-      const resp =
-        await generativeModel.generateContent(
-          prompt,
-        );
+      const resp = await generativeModel.generateContent(prompt);
 
       return (
-        resp.response
-          .candidates?.[0]
-          ?.content?.parts?.[0]
-          ?.text ||
+        resp.response.candidates?.[0]?.content?.parts?.[0]?.text ||
         'Prediction engine is standing by.'
       );
     } catch (error) {
@@ -412,7 +323,7 @@ ${JSON.stringify(history)}
       );
 
       return (
-        'Prediction engine currently offline. Please rely on live radar.'
+        'Prediction engine currently offline. Please rely on the latest available radar data.'
       );
     }
   }

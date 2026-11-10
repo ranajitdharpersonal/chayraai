@@ -1,57 +1,68 @@
+
 import { NextResponse } from 'next/server';
-import { scanGlobalThreats } from '@/core/agents/radar';
-import { EnterpriseAgentRegistry } from '@/core/adk/registry';
-import { PredictiveMemoryBank } from '@/core/adk/memory';
-// Force load MindGuard into the Registry
-import '@/core/agents/mindguard';
 
-// ==========================================
-// PHASE 4: THE 24/7 AUTONOMOUS AGENT RUNTIME
-// ==========================================
-// This endpoint is designed to be triggered asynchronously by a background scheduler
-export async function GET(request: Request) {
-  console.log("[Autonomous Engine]: Initiating background perimeter scan...");
+import { getRadarSnapshot } from '@/core/aws/radar-snapshot';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+// ============================================================
+// READ-ONLY RADAR SNAPSHOT API
+// No live NASA/USGS scans from frontend requests.
+// ============================================================
+
+export async function GET() {
   try {
-    // 1. Fetch live global threats (NASA, USGS, War Zones)
-    const threats = await scanGlobalThreats();
+    const snapshot = await getRadarSnapshot();
 
-    // 2. Process the top threat autonomously without any human interaction
-    if (threats && threats.length > 0) {
-       const topThreat = threats[0]; // Picking the most immediate threat for the demo
-       
-       // Dynamically load MindGuard from the Enterprise Registry
-       const mindguardFlow = EnterpriseAgentRegistry.getAgent('MindGuard');
-       
-       if (mindguardFlow) {
-           // Run the threat through our Model Armor
-           const securityCheck = await mindguardFlow({
-              input: topThreat.name 
-            });
-            
-            if (securityCheck.isEmergency) {
-             // 3. Save to Persistent Predictive Memory autonomously
-             await PredictiveMemoryBank.saveSituationState('global_background_watch', {
-               lastThreat: topThreat.name,
-               location: { lat: topThreat.lat, lng: topThreat.lng },
-               type: topThreat.type,
-               status: 'Autonomously logged by Agent Runtime'
-             });
-             
-             console.log(`[Autonomous Engine]: Critical threat automatically logged -> ${topThreat.name}`);
-           }
-       }
+    if (!snapshot) {
+      return NextResponse.json(
+        {
+          success: true,
+          snapshotAvailable: false,
+          activeThreats: 0,
+          threats: [],
+          scannedAt: null,
+          message: 'Daily radar snapshot is not available yet.',
+        },
+        {
+          headers: { 'Cache-Control': 'no-store' },
+        },
+      );
     }
 
-    // 🛑 THE FIX: Added "threats: threats" to send the actual array to the Map!
-    return NextResponse.json({
-        success: true,
-        message: "Autonomous background scan complete",
-        activeThreats: threats.length,
-        threats: threats 
-      });
+    const ageMs =
+      Date.now() - new Date(snapshot.scannedAt).getTime();
 
+    return NextResponse.json(
+      {
+        success: true,
+        snapshotAvailable: true,
+        activeThreats: snapshot.threats.length,
+        threats: snapshot.threats,
+        scannedAt: snapshot.scannedAt,
+        snapshotAgeHours:
+          Number.isFinite(ageMs)
+            ? Number((Math.max(0, ageMs) / 3_600_000).toFixed(2))
+            : null,
+      },
+      {
+        headers: { 'Cache-Control': 'no-store' },
+      },
+    );
   } catch (error) {
-    console.error("[Autonomous Engine]: Background cycle failed.", error);
-    return NextResponse.json({ success: false, error: "Autonomous execution failed" }, { status: 500 });
+    console.error('[Radar API]: Snapshot retrieval failed.', error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        snapshotAvailable: false,
+        error: 'Radar snapshot temporarily unavailable.',
+      },
+      {
+        status: 503,
+        headers: { 'Cache-Control': 'no-store' },
+      },
+    );
   }
 }
