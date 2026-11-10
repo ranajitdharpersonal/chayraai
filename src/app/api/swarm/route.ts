@@ -14,6 +14,7 @@ import '@/core/agents/medical';
 import '@/core/agents/navigator';
 import '@/core/agents/verifier';
 import '@/core/agents/publicHealth';
+import '@/core/agents/vault';
 
 const APP_NAME = 'chayra-enterprise-fleet';
 const DEFAULT_USER_ID = 'chayra-user';
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
 
     const activeSessionId =
       typeof sessionId === 'string' &&
-      sessionId.trim()
+        sessionId.trim()
         ? sessionId
         : `session-${Date.now()}`;
 
@@ -97,8 +98,8 @@ export async function POST(req: Request) {
       state: {
         userCoords:
           coords &&
-          typeof coords.lat === 'number' &&
-          typeof coords.lng === 'number'
+            typeof coords.lat === 'number' &&
+            typeof coords.lng === 'number'
             ? coords
             : undefined,
 
@@ -129,8 +130,7 @@ export async function POST(req: Request) {
       newMessage,
     })) {
       console.log(
-        `[ADK Event]: ${
-          event.author || 'unknown'
+        `[ADK Event]: ${event.author || 'unknown'
         }`,
       );
 
@@ -140,7 +140,7 @@ export async function POST(req: Request) {
       if (
         structuredResult &&
         typeof event.author ===
-          'string'
+        'string'
       ) {
         eventResults[
           event.author
@@ -175,10 +175,10 @@ export async function POST(req: Request) {
     if (
       mindGuardResult &&
       mindGuardResult.isEmergency ===
-        false &&
+      false &&
       !String(
         mindGuardResult.reason ??
-          '',
+        '',
       ).includes('Fallback')
     ) {
       return NextResponse.json({
@@ -218,6 +218,11 @@ export async function POST(req: Request) {
       state['PublicHealth_result'] ??
       null;
 
+    const vaultData =
+      eventResults.Vault ??
+      state['Vault_result'] ??
+      null;
+
     const evidencePanel =
       eventResults.Verifier ??
       state['Verifier_result'] ??
@@ -241,7 +246,7 @@ export async function POST(req: Request) {
     const threatLevel =
       String(
         scavengerResult.threatLevel ??
-          'UNKNOWN',
+        'UNKNOWN',
       ).toUpperCase();
 
     if (
@@ -283,7 +288,7 @@ export async function POST(req: Request) {
         hasNavigatorState:
           Boolean(
             state[
-              'Navigator_result'
+            'Navigator_result'
             ],
           ),
         hasDestCoords:
@@ -310,6 +315,8 @@ export async function POST(req: Request) {
 
       navigation:
         navigationData,
+
+      vault: vaultData,
 
       navigationText:
         resolvedNavigationText,

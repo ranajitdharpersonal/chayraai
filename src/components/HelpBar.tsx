@@ -203,7 +203,7 @@ export default function HelpBar() {
       setLatency(Math.round(endTime - startTime));
 
       if (data.type === 'success' || data.type === 'spam') {
-        setChatLog({ role: 'ai', text: data.type === 'spam' ? `[MINDGUARD BLOCKED]: ${data.message}` : "Swarm execution complete. Data injected to tactical panels.", brain: "ChayRa Multi-Provider Brain", circuitTripped: null });
+        setChatLog({ role: 'ai', text: data.type === 'spam' ? `[MINDGUARD BLOCKED]: ${data.message}` : "Swarm execution complete. Data injected to tactical panels.", brain: "Amazon Bedrock Central Brain", circuitTripped: null });
 
         if (data.type === 'success') {
           // MAPPING THE NEW BACKEND DATA TO THE ACTION PANEL

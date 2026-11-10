@@ -2,16 +2,15 @@
 // CHAYRA AI — PROVIDER-INDEPENDENT AGENT REGISTRY
 // ============================================================
 //
-// Central Brain Gateway:
-// Amazon Bedrock -> Gemini -> Groq
+// Agent registry is independent of the AI provider.
 //
-// Existing agents retain their import contract:
+// All model inference is handled through:
+// Central Brain → Amazon Bedrock
 //
-// import { EnterpriseAgentRegistry, vertexAI }
-//   from '../adk/registry';
+// Session and intelligence persistence:
+// Amazon DynamoDB
 //
-// Continuous heartbeat and Firestore writes are removed.
-// DynamoDB persistence will be connected in the next stage.
+// No Vertex AI, Gemini or Groq inference fallback.
 // ============================================================
 
 // ============================================================

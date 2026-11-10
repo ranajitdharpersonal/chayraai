@@ -27,9 +27,16 @@ export async function GET() {
         ? Date.now() - new Date(timestamp).getTime()
         : Number.POSITIVE_INFINITY;
 
+    // ✅ ADD THIS HERE
+    const cachedSourceStatus =
+      cached?.metadata?.sourceStatus ??
+      cached?.sourceStatus ??
+      'UNAVAILABLE';
+
     // Return fresh cached state.
     if (
       cached &&
+      cachedSourceStatus !== 'UNAVAILABLE' &&
       Number.isFinite(cachedAge) &&
       cachedAge >= 0 &&
       cachedAge < CACHE_TTL_MS

@@ -127,6 +127,7 @@ export class ChayRaCrisisFleet extends BaseAgent {
   private navigator: ChayRaAgentAdapter;
   private publicHealth: ChayRaAgentAdapter;
   private verifier: ChayRaAgentAdapter;
+  private vault: ChayRaAgentAdapter;
 
   constructor() {
     const mindGuard = new ChayRaAgentAdapter(
@@ -161,7 +162,7 @@ export class ChayRaCrisisFleet extends BaseAgent {
 
     const publicHealth = new ChayRaAgentAdapter(
       'PublicHealth',
-      'Analyzes live public-health alerts and outbreak intelligence.',
+      'Reads cached WHO and UN ReliefWeb intelligence snapshots.',
       'PublicHealth',
     );
 
@@ -169,6 +170,12 @@ export class ChayRaCrisisFleet extends BaseAgent {
       'Verifier',
       'Cross-checks claims against live radar intelligence.',
       'Verifier',
+    );
+
+    const vault = new ChayRaAgentAdapter(
+      'Vault',
+      'Generates rescue beacons and offline communication guidance.',
+      'Vault',
     );
 
     super({
@@ -183,6 +190,7 @@ export class ChayRaCrisisFleet extends BaseAgent {
         navigator,
         publicHealth,
         verifier,
+        vault,
       ],
     });
 
@@ -193,6 +201,7 @@ export class ChayRaCrisisFleet extends BaseAgent {
     this.navigator = navigator;
     this.publicHealth = publicHealth;
     this.verifier = verifier;
+    this.vault = vault;
   }
 
   async *runAsyncImpl(
@@ -298,6 +307,20 @@ export class ChayRaCrisisFleet extends BaseAgent {
       );
     }
 
+    if (requiredAgents.includes('Vault')) {
+      parallelTasks.push(
+        (async () => {
+          console.log(
+            '[ADK Runtime]: Parallel → Vault',
+          );
+
+          for await (const event of this.vault.runAsync(ctx)) {
+            parallelEvents.push(event);
+          }
+        })(),
+      );
+    }
+
     // Public Health runs as an enterprise background intelligence
     // component for every crisis cycle.
     parallelTasks.push(
@@ -357,7 +380,7 @@ export class ChayRaCrisisFleet extends BaseAgent {
  * Singleton root agent.
  *
  * The object itself is ADK-native and can later be passed
- * directly to an ADK Runner / Cloud Run agent runtime.
+ * directly to the ADK InMemoryRunner inside the Vercel Node.js API route.
  */
 export const chayRaCrisisFleet =
   new ChayRaCrisisFleet();
