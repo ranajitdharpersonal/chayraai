@@ -1,6 +1,3 @@
-
-import { vertexAI } from '../brain/brain';
-
 // ============================================================
 // CHAYRA AI — PROVIDER-INDEPENDENT AGENT REGISTRY
 // ============================================================
@@ -16,9 +13,6 @@ import { vertexAI } from '../brain/brain';
 // Continuous heartbeat and Firestore writes are removed.
 // DynamoDB persistence will be connected in the next stage.
 // ============================================================
-
-// Preserve compatibility with existing agent imports.
-export { vertexAI };
 
 // ============================================================
 // AGENT METADATA

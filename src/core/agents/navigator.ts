@@ -1,11 +1,6 @@
-import {
-  EnterpriseAgentRegistry,
-  vertexAI,
-} from '../adk/registry';
+import { EnterpriseAgentRegistry } from '../adk/registry';
+import { generateText } from '../brain/brain';
 
-const generativeModel = vertexAI.getGenerativeModel({
-  model: 'gemini-3.8-flash',
-});
 
 type LatLng = {
   lat: number;
@@ -474,14 +469,7 @@ Return ONLY valid JSON:
 }
 `;
 
-    const resp =
-      await generativeModel.generateContent(
-        prompt,
-      );
-
-    const text =
-      resp.response.candidates?.[0]?.content?.parts?.[0]?.text ||
-      '{}';
+    const text = await generateText(prompt) || '{}';
 
     const cleanJson =
       text

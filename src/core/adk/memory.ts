@@ -10,7 +10,7 @@ import {
   getDynamoDocumentClient,
 } from '../aws/dynamo';
 
-import { vertexAI } from './registry';
+import { generateText } from '../brain/brain';
 
 // ============================================================
 // DYNAMODB KEY CONFIGURATION
@@ -341,12 +341,6 @@ export class PredictiveMemoryBank {
     }
 
     try {
-      // Inference is routed through the central Brain gateway.
-      const generativeModel = vertexAI.getGenerativeModel({
-        model:
-          process.env.PREDICTIVE_MEMORY_MODEL ||
-          'gemini-3.8-flash',
-      });
 
       const prompt = `
 You are the Predictive Memory Engine for an Enterprise Crisis Fleet.
@@ -361,12 +355,7 @@ Situation History:
 ${JSON.stringify(history)}
 `;
 
-      const resp = await generativeModel.generateContent(prompt);
-
-      return (
-        resp.response.candidates?.[0]?.content?.parts?.[0]?.text ||
-        'Prediction engine is standing by.'
-      );
+      return await generateText(prompt);
     } catch (error) {
       console.error(
         '[Memory Bank]: Prediction generation failed.',

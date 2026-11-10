@@ -1,7 +1,6 @@
-import { EnterpriseAgentRegistry, vertexAI } from '../adk/registry';
+import { EnterpriseAgentRegistry } from '../adk/registry';
 import { PredictiveMemoryBank } from '../adk/memory';
-
-const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
+import { generateText } from '../brain/brain';
 
 interface OfficialAlert {
   id: string;
@@ -323,16 +322,14 @@ Return ONLY JSON:
 }
 `;
 
-    const resp = await generativeModel.generateContent(prompt);
-    const rawText =
-      resp.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const rawText = await generateText(prompt);
     const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
 
     let result: any = {};
     try {
       result = JSON.parse(cleanJson);
     } catch {
-      console.warn('[Public Health]: Gemini returned malformed JSON.');
+      console.warn('[Public Health]: Central Brain returned malformed JSON.');
     }
 
     const outbreakReports: OutbreakReport[] =

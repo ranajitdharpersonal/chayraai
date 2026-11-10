@@ -2,63 +2,20 @@
 import {
   BedrockRuntimeClient,
   ConverseCommand,
-} from "@aws-sdk/client-bedrock-runtime";
+} from '@aws-sdk/client-bedrock-runtime';
 
 // ============================================================
-// CHAYRA AI — CENTRAL MULTI-BRAIN GATEWAY
+// CHAYRA AI 3.0 — CENTRAL BRAIN GATEWAY
+// Active provider: Amazon Bedrock ONLY
 // ============================================================
-// Provider priority:
-// 1. Amazon Bedrock
-// 2. Gemini Developer API
-// 3. Groq (optional; enable explicitly to control costs)
-//
-// Existing agents continue using:
-// vertexAI.getGenerativeModel({ model }).generateContent(prompt)
-//
-// The legacy response shape is preserved.
-// ============================================================
-
-type BrainProvider = "BEDROCK" | "GEMINI" | "GROQ";
-
-type BrainResult = {
-  text: string;
-  provider: BrainProvider;
-  model: string;
-};
-
-class BrainProviderError extends Error {
-  provider: BrainProvider;
-  status?: number;
-  code?: string;
-
-  constructor(
-    provider: BrainProvider,
-    message: string,
-    status?: number,
-    code?: string,
-  ) {
-    super(message);
-    this.name = "BrainProviderError";
-    this.provider = provider;
-    this.status = status;
-    this.code = code;
-  }
-}
 
 const CONFIG = {
-  awsRegion: process.env.AWS_REGION || "ap-south-1",
+  region:
+    process.env.AWS_REGION || 'ap-south-1',
 
-  bedrockModel:
-    process.env.AWS_BEDROCK_MODEL_ID ||
-    "apac.amazon.nova-lite-v1:0",
-
-  geminiModel:
-    process.env.GEMINI_MODEL_ID ||
-    "gemini-3.8-flash",
-
-  groqModel:
-    process.env.GROQ_MODEL_ID ||
-    "openai/gpt-oss-20b",
+  modelId:
+    process.env.AWS_BEDROCK_MODEL_ID?.trim() ||
+    'apac.amazon.nova-lite-v1:0',
 
   maxTokens: Math.min(
     4096,
@@ -68,35 +25,32 @@ const CONFIG = {
     ),
   ),
 
-  timeoutMs: 30000,
-
-  // Groq is not assumed to be free.
-  // Enable only after accepting its usage pricing.
-  allowGroq:
-    process.env.ALLOW_GROQ_FALLBACK === "true",
+  temperature: 0.2,
+  timeoutMs: 30_000,
 };
+
+let bedrockClient: BedrockRuntimeClient | null = null;
 
 // ============================================================
 // BEDROCK CLIENT
 // ============================================================
 
-let bedrockClient: BedrockRuntimeClient | null = null;
-
 function getBedrockClient(): BedrockRuntimeClient {
-  if (bedrockClient) return bedrockClient;
+  if (bedrockClient) {
+    return bedrockClient;
+  }
 
-  const accessKey = process.env.AWS_ACCESS_KEY_ID;
-  const secretKey = process.env.AWS_SECRET_ACCESS_KEY;
+  const accessKey = process.env.AWS_ACCESS_KEY_ID?.trim();
+  const secretKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
 
   if (Boolean(accessKey) !== Boolean(secretKey)) {
-    throw new BrainProviderError(
-      "BEDROCK",
-      "Both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required.",
+    throw new Error(
+      '[Central Brain]: Both AWS access key and secret key must be configured together.',
     );
   }
 
   bedrockClient = new BedrockRuntimeClient({
-    region: CONFIG.awsRegion,
+    region: CONFIG.region,
 
     ...(accessKey && secretKey
       ? {
@@ -104,7 +58,9 @@ function getBedrockClient(): BedrockRuntimeClient {
             accessKeyId: accessKey,
             secretAccessKey: secretKey,
             ...(process.env.AWS_SESSION_TOKEN
-              ? { sessionToken: process.env.AWS_SESSION_TOKEN }
+              ? {
+                  sessionToken: process.env.AWS_SESSION_TOKEN,
+                }
               : {}),
           },
         }
@@ -117,419 +73,109 @@ function getBedrockClient(): BedrockRuntimeClient {
 }
 
 // ============================================================
-// 1. AMAZON BEDROCK
+// SINGLE INFERENCE ENTRY POINT
+// All agents must use this function.
 // ============================================================
 
-async function callBedrock(prompt: string): Promise<BrainResult> {
+export async function generateText(
+  prompt: string,
+): Promise<string> {
+  if (
+    typeof prompt !== 'string' ||
+    !prompt.trim()
+  ) {
+    throw new Error(
+      '[Central Brain]: Prompt cannot be empty.',
+    );
+  }
+
+  console.log(
+    `[Central Brain]: Sending inference to Amazon Bedrock (${CONFIG.modelId})...`,
+  );
+
   try {
     const command = new ConverseCommand({
-      modelId: CONFIG.bedrockModel,
+      modelId: CONFIG.modelId,
 
       messages: [
         {
-          role: "user",
-          content: [{ text: prompt }],
+          role: 'user',
+          content: [
+            {
+              text: prompt,
+            },
+          ],
         },
       ],
 
       inferenceConfig: {
         maxTokens: CONFIG.maxTokens,
-        temperature: 0.2,
+        temperature: CONFIG.temperature,
       },
     });
 
-    const response = await getBedrockClient().send(command, {
-      abortSignal: AbortSignal.timeout(CONFIG.timeoutMs),
-    });
+    const response = await getBedrockClient().send(
+      command,
+      {
+        abortSignal: AbortSignal.timeout(
+          CONFIG.timeoutMs,
+        ),
+      },
+    );
 
-    if (response.stopReason === "guardrail_intervened") {
-      throw new BrainProviderError(
-        "BEDROCK",
-        "Bedrock guardrail blocked the request.",
-      );
-    }
-
-    const content = response.output?.message?.content ?? [];
+    const content =
+      response.output?.message?.content ?? [];
 
     const text = content
-      .map((item) => item.text || "")
-      .join("\n")
+      .map((block) => block.text || '')
+      .join('\n')
       .trim();
 
     if (!text) {
-      throw new BrainProviderError(
-        "BEDROCK",
-        "Bedrock returned an empty response.",
+      throw new Error(
+        `Bedrock returned no text. Stop reason: ${response.stopReason || 'UNKNOWN'}`,
       );
     }
 
-    return {
-      text,
-      provider: "BEDROCK",
-      model: CONFIG.bedrockModel,
-    };
-  } catch (error: any) {
-    if (error instanceof BrainProviderError) throw error;
-
-    throw new BrainProviderError(
-      "BEDROCK",
-      error?.message || "Bedrock inference failed.",
-      error?.$metadata?.httpStatusCode,
-      error?.name,
-    );
-  }
-}
-
-// ============================================================
-// 2. GEMINI DEVELOPER API
-// ============================================================
-
-async function callGemini(prompt: string): Promise<BrainResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    throw new BrainProviderError(
-      "GEMINI",
-      "GEMINI_API_KEY is not configured.",
-    );
-  }
-
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-        CONFIG.geminiModel,
-      )}:generateContent`,
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-
-        signal: AbortSignal.timeout(CONFIG.timeoutMs),
-
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: prompt }],
-            },
-          ],
-
-          generationConfig: {
-            maxOutputTokens: CONFIG.maxTokens,
-          },
-        }),
-      },
+    console.log(
+      `[Central Brain]: Bedrock inference completed. Model=${CONFIG.modelId}`,
     );
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new BrainProviderError(
-        "GEMINI",
-        data?.error?.message || `Gemini HTTP ${response.status}`,
-        response.status,
-      );
-    }
-
-    if (
-      data?.promptFeedback?.blockReason ||
-      data?.candidates?.[0]?.finishReason === "SAFETY"
-    ) {
-      throw new BrainProviderError(
-        "GEMINI",
-        "Gemini safety policy blocked this request.",
-      );
-    }
-
-    const text =
-      data?.candidates?.[0]?.content?.parts
-        ?.map((part: any) => part.text || "")
-        .join("\n")
-        .trim() || "";
-
-    if (!text) {
-      throw new BrainProviderError(
-        "GEMINI",
-        "Gemini returned an empty response.",
-      );
-    }
-
-    return {
-      text,
-      provider: "GEMINI",
-      model: CONFIG.geminiModel,
-    };
-  } catch (error: any) {
-    if (error instanceof BrainProviderError) throw error;
-
-    throw new BrainProviderError(
-      "GEMINI",
-      error?.message || "Gemini inference failed.",
-    );
-  }
-}
-
-// ============================================================
-// 3. GROQ
-// ============================================================
-
-async function callGroq(prompt: string): Promise<BrainResult> {
-  const apiKey = process.env.GROQ_API_KEY;
-
-  if (!apiKey) {
-    throw new BrainProviderError(
-      "GROQ",
-      "GROQ_API_KEY is not configured.",
-    );
-  }
-
-  try {
-    const response = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-
-        signal: AbortSignal.timeout(CONFIG.timeoutMs),
-
-        body: JSON.stringify({
-          model: CONFIG.groqModel,
-
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-
-          max_completion_tokens: CONFIG.maxTokens,
-          reasoning_effort: "low",
-          stream: false,
-        }),
-      },
+    return text;
+  } catch (error) {
+    console.error(
+      '[Central Brain]: Bedrock inference failed.',
+      error,
     );
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new BrainProviderError(
-        "GROQ",
-        data?.error?.message || `Groq HTTP ${response.status}`,
-        response.status,
-      );
-    }
-
-    const text =
-      data?.choices?.[0]?.message?.content?.trim() || "";
-
-    if (!text) {
-      throw new BrainProviderError(
-        "GROQ",
-        "Groq returned an empty response.",
-      );
-    }
-
-    return {
-      text,
-      provider: "GROQ",
-      model: CONFIG.groqModel,
-    };
-  } catch (error: any) {
-    if (error instanceof BrainProviderError) throw error;
-
-    throw new BrainProviderError(
-      "GROQ",
-      error?.message || "Groq inference failed.",
-    );
-  }
-}
-
-// ============================================================
-// SAFETY POLICY
-// ============================================================
-
-// Never bypass a safety refusal by asking another model.
-// Provider availability errors can use failover.
-
-function isSafetyFailure(error: BrainProviderError): boolean {
-  return /safety|guardrail|blocked by policy|content policy/i.test(
-    error.message,
-  );
-}
-
-// ============================================================
-// CENTRAL FAILOVER ENGINE
-// ============================================================
-
-async function generateWithFailover(
-  prompt: string,
-): Promise<BrainResult> {
-  if (!prompt || !prompt.trim()) {
-    throw new Error("Brain Gateway received an empty prompt.");
-  }
-
-  const providers: Array<{
-    name: BrainProvider;
-    enabled: boolean;
-    run: (prompt: string) => Promise<BrainResult>;
-  }> = [
-    {
-      name: "BEDROCK",
-      enabled: Boolean(
-        process.env.AWS_ACCESS_KEY_ID &&
-        process.env.AWS_SECRET_ACCESS_KEY,
-      ),
-      run: callBedrock,
-    },
-
-    {
-      name: "GEMINI",
-      enabled: Boolean(process.env.GEMINI_API_KEY),
-      run: callGemini,
-    },
-
-    {
-      name: "GROQ",
-      enabled:
-        CONFIG.allowGroq &&
-        Boolean(process.env.GROQ_API_KEY),
-      run: callGroq,
-    },
-  ];
-
-  const activeProviders = providers.filter(
-    (provider) => provider.enabled,
-  );
-
-  if (activeProviders.length === 0) {
     throw new Error(
-      "No AI provider is configured. Check server environment variables.",
+      error instanceof Error
+        ? `Amazon Bedrock inference failed: ${error.message}`
+        : 'Amazon Bedrock inference failed.',
     );
   }
-
-  const failures: string[] = [];
-
-  for (const provider of activeProviders) {
-    try {
-      console.log(
-        `[Brain Gateway] Attempting ${provider.name}...`,
-      );
-
-      const result = await provider.run(prompt);
-
-      console.log(
-        `[Brain Gateway] Success → ${result.provider} (${result.model})`,
-      );
-
-      return result;
-    } catch (error: any) {
-      const failure =
-        error instanceof BrainProviderError
-          ? error
-          : new BrainProviderError(
-              provider.name,
-              error?.message || "Unknown provider failure.",
-            );
-
-      console.error(
-        `[Brain Gateway] ${provider.name} failed:`,
-        failure.message,
-      );
-
-      failures.push(
-        `${provider.name}: ${failure.message}`,
-      );
-
-      if (isSafetyFailure(failure)) {
-        throw new Error(
-          `Brain Gateway stopped because a provider safety policy intervened: ${failure.provider}`,
-        );
-      }
-
-      console.warn(
-        `[Brain Gateway] Switching to the next configured provider...`,
-      );
-    }
-  }
-
-  throw new Error(
-    `All configured AI providers failed.\n${failures.join("\n")}`,
-  );
 }
 
 // ============================================================
-// LEGACY-COMPATIBLE INTERFACE
-// ============================================================
-
-// Existing agent files can retain their current imports.
-// Their requested legacy model name is intentionally overridden
-// by the central provider configuration.
-
-export const vertexAI = {
-  getGenerativeModel({
-    model,
-  }: {
-    model: string;
-  }) {
-    return {
-      async generateContent(prompt: string) {
-        console.log(
-          `[Brain Gateway] Legacy model request: ${model}`,
-        );
-
-        const result = await generateWithFailover(prompt);
-
-        return {
-          response: {
-            candidates: [
-              {
-                content: {
-                  parts: [
-                    {
-                      text: result.text,
-                    },
-                  ],
-                },
-              },
-            ],
-          },
-
-          provider: result.provider,
-          actualModel: result.model,
-        };
-      },
-    };
-  },
-};
-
-// ============================================================
-// HEALTH / CONFIGURATION SUMMARY
+// CONFIGURATION SUMMARY
 // ============================================================
 
 export function getBrainConfiguration() {
+  const hasExplicitCredentials = Boolean(
+    process.env.AWS_ACCESS_KEY_ID &&
+    process.env.AWS_SECRET_ACCESS_KEY,
+  );
+
   return {
-    primary: "BEDROCK",
-    secondary: "GEMINI",
-    tertiary: CONFIG.allowGroq ? "GROQ" : "DISABLED",
+    activeProvider: 'BEDROCK',
+    modelId: CONFIG.modelId,
+    region: CONFIG.region,
 
-    configured: {
-      bedrock: Boolean(
-        process.env.AWS_ACCESS_KEY_ID &&
-        process.env.AWS_SECRET_ACCESS_KEY,
-      ),
+    credentialsMode: hasExplicitCredentials
+      ? 'ENVIRONMENT_VARIABLES'
+      : 'AWS_SDK_DEFAULT_CREDENTIAL_CHAIN',
 
-      gemini: Boolean(process.env.GEMINI_API_KEY),
-
-      groq: Boolean(process.env.GROQ_API_KEY),
-    },
-
-    groqFallbackEnabled: CONFIG.allowGroq,
+    secondaryProvidersEnabled: false,
+    tertiaryProvidersEnabled: false,
   };
 }
