@@ -22,10 +22,6 @@ import {
   Clock3,
 } from 'lucide-react';
 
-// ============================================================
-// TYPES
-// ============================================================
-
 type Coordinates = {
   lat: number;
   lng: number;
@@ -37,10 +33,6 @@ type ChatLog = {
   brain?: string;
   circuitTripped?: string | null;
 };
-
-// ============================================================
-// SESSION MANAGEMENT
-// ============================================================
 
 function getOrCreateSessionId(): string {
   const storageKey = 'chayra-session-id';
@@ -58,7 +50,7 @@ function getOrCreateSessionId(): string {
       return existing;
     }
   } catch {
-    // Session storage may be blocked by browser settings.
+    // Session storage may be blocked.
   }
 
   const sessionId = window.crypto.randomUUID();
@@ -69,16 +61,11 @@ function getOrCreateSessionId(): string {
       sessionId,
     );
   } catch {
-    // A fresh UUID still isolates this request
-    // when persistent tab storage is unavailable.
+    // A fresh UUID still isolates this request.
   }
 
   return sessionId;
 }
-
-// ============================================================
-// VALIDATION
-// ============================================================
 
 function isValidCoordinates(
   value: any,
@@ -93,6 +80,14 @@ function isValidCoordinates(
     value.lat <= 90 &&
     value.lng >= -180 &&
     value.lng <= 180,
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value),
   );
 }
 
@@ -122,45 +117,20 @@ function getApiErrorMessage(
   return 'The request could not be completed.';
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
-
 export default function HelpBar() {
+  const [input, setInput] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [chatLog, setChatLog] = useState<ChatLog | null>(null);
+  const [latency, setLatency] = useState<number | null>(null);
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  const [userCoords, setUserCoords] = useState<Coordinates | null>(null);
+  const [isPinDropMode, setIsPinDropMode] = useState(false);
 
-  const [input, setInput] =
-    useState('');
+  const recognitionRef = useRef<any>(null);
 
-  const [isProcessing, setIsProcessing] =
-    useState(false);
-
-  const [isListening, setIsListening] =
-    useState(false);
-
-  const [chatLog, setChatLog] =
-    useState<ChatLog | null>(null);
-
-  const [latency, setLatency] =
-    useState<number | null>(null);
-
-  const [showLocationPrompt, setShowLocationPrompt] =
-    useState(false);
-
-  const [userCoords, setUserCoords] =
-    useState<Coordinates | null>(null);
-
-  const [isPinDropMode, setIsPinDropMode] =
-    useState(false);
-
-  const recognitionRef =
-    useRef<any>(null);
-
-  // ==========================================================
-  // 1. SYSTEM RESET EVENT
-  // ==========================================================
-
+  // 1. System reset.
   useEffect(() => {
-
     const handleSystemReset = () => {
       setUserCoords(null);
       setIsPinDropMode(false);
@@ -179,13 +149,9 @@ export default function HelpBar() {
         handleSystemReset,
       );
     };
-
   }, []);
 
-  // ==========================================================
-  // 2. VOICE RECOGNITION CLEANUP
-  // ==========================================================
-
+  // 2. Voice recognition cleanup.
   useEffect(() => {
     return () => {
       try {
@@ -196,22 +162,15 @@ export default function HelpBar() {
     };
   }, []);
 
-  // ==========================================================
-  // 3. MAP RESET
-  // ==========================================================
-
+  // 3. Map reset.
   const triggerReset = () => {
     window.dispatchEvent(
       new CustomEvent('SYSTEM_RESET'),
     );
   };
 
-  // ==========================================================
-  // 4. VOICE INPUT
-  // ==========================================================
-
+  // 4. Voice input.
   const toggleRecording = () => {
-
     const SpeechRecognitionAPI =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -220,7 +179,6 @@ export default function HelpBar() {
       alert(
         'Voice input is not supported in this browser. Please use Chrome or Edge.',
       );
-
       return;
     }
 
@@ -230,8 +188,7 @@ export default function HelpBar() {
     }
 
     try {
-      const recognition =
-        new SpeechRecognitionAPI();
+      const recognition = new SpeechRecognitionAPI();
 
       recognition.lang = 'en-US';
       recognition.continuous = false;
@@ -252,7 +209,6 @@ export default function HelpBar() {
       };
 
       recognition.onerror = (event: any) => {
-
         console.error(
           '[Voice]: Speech recognition failed.',
           event,
@@ -271,11 +227,8 @@ export default function HelpBar() {
       };
 
       recognitionRef.current = recognition;
-
       recognition.start();
-
     } catch (error) {
-
       console.error(
         '[Voice]: Could not initialize speech recognition.',
         error,
@@ -290,24 +243,17 @@ export default function HelpBar() {
     }
   };
 
-  // ==========================================================
-  // 5. LOCATION ACQUISITION
-  // ==========================================================
-
+  // 5. Location acquisition.
   const fetchLiveLocation = () => {
-
     if (!navigator.geolocation) {
       alert(
         'Geolocation is not supported by your browser.',
       );
-
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
-
       (position) => {
-
         const coords: Coordinates = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -318,35 +264,25 @@ export default function HelpBar() {
             role: 'error',
             text: 'Browser returned invalid GPS coordinates.',
           });
-
           return;
         }
 
         setUserCoords(coords);
-
         setShowLocationPrompt(false);
 
         window.dispatchEvent(
-          new CustomEvent(
-            'UPDATE_USER_PIN',
-            {
-              detail: coords,
-            },
-          ),
+          new CustomEvent('UPDATE_USER_PIN', {
+            detail: coords,
+          }),
         );
 
         const message = input.trim();
 
         if (message) {
-          void executeRescueProtocol(
-            coords,
-            message,
-          );
+          void executeRescueProtocol(coords, message);
         }
       },
-
       (error) => {
-
         console.error(
           '[Location]: Geolocation failed.',
           error,
@@ -365,7 +301,6 @@ export default function HelpBar() {
             'Location access failed. Please use Drop a Pin.',
         });
       },
-
       {
         enableHighAccuracy: true,
         timeout: 15_000,
@@ -374,14 +309,9 @@ export default function HelpBar() {
     );
   };
 
-  // ==========================================================
-  // 6. MANUAL MAP PIN
-  // ==========================================================
-
+  // 6. Manual map pin.
   const enablePinDrop = () => {
-
     setShowLocationPrompt(false);
-
     setIsPinDropMode(true);
 
     window.dispatchEvent(
@@ -395,12 +325,8 @@ export default function HelpBar() {
     });
   };
 
-  // ==========================================================
-  // 7. MAIN USER SUBMISSION
-  // ==========================================================
-
+  // 7. Main user submission.
   const handleInitialSend = () => {
-
     const message = input.trim();
 
     if (!message || isProcessing || isListening) {
@@ -412,21 +338,14 @@ export default function HelpBar() {
       return;
     }
 
-    void executeRescueProtocol(
-      userCoords,
-      message,
-    );
+    void executeRescueProtocol(userCoords, message);
   };
 
-  // ==========================================================
-  // 8. CENTRAL SWARM API CONNECTION
-  // ==========================================================
-
+  // 8. Central swarm API connection.
   async function executeRescueProtocol(
     coords: Coordinates,
     submittedMessage: string,
   ): Promise<void> {
-
     const message = submittedMessage.trim();
 
     if (!message || isProcessing) {
@@ -438,16 +357,12 @@ export default function HelpBar() {
         role: 'error',
         text: 'Valid GPS coordinates are required.',
       });
-
       return;
     }
 
     setIsProcessing(true);
-
     setShowLocationPrompt(false);
-
     setIsPinDropMode(false);
-
     setLatency(null);
 
     setChatLog({
@@ -459,29 +374,20 @@ export default function HelpBar() {
     const startTime = performance.now();
 
     try {
+      const sessionId = getOrCreateSessionId();
 
-      // Each browser tab gets its own stable UUID.
-      const sessionId =
-        getOrCreateSessionId();
-
-      const response = await fetch(
-        '/api/swarm',
-        {
-          method: 'POST',
-
-          headers: {
-            'Content-Type': 'application/json',
-          },
-
-          body: JSON.stringify({
-            message,
-            coords,
-            sessionId,
-          }),
-
-          cache: 'no-store',
+      const response = await fetch('/api/swarm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      );
+        body: JSON.stringify({
+          message,
+          coords,
+          sessionId,
+        }),
+        cache: 'no-store',
+      });
 
       let data: any;
 
@@ -498,25 +404,15 @@ export default function HelpBar() {
 
       setLatency(elapsed);
 
-      // ------------------------------------------------------
-      // API FAILURE
-      // ------------------------------------------------------
-
+      // API failure.
       if (!response.ok || data?.type === 'error') {
         throw new Error(
-          getApiErrorMessage(
-            data,
-            response.status,
-          ),
+          getApiErrorMessage(data, response.status),
         );
       }
 
-      // ------------------------------------------------------
-      // MINDGUARD RESPONSE
-      // ------------------------------------------------------
-
+      // MindGuard response.
       if (data?.type === 'spam') {
-
         setChatLog({
           role: 'ai',
           text:
@@ -526,43 +422,62 @@ export default function HelpBar() {
         });
 
         setInput('');
-
         return;
       }
 
       if (data?.type !== 'success') {
-        throw new Error(
-          'Unexpected server response.',
-        );
+        throw new Error('Unexpected server response.');
       }
 
-      // ------------------------------------------------------
-      // NORMALIZE BACKEND RESULTS
-      // ------------------------------------------------------
+      // Normalize backend results.
+      const medicalData = Array.isArray(data.medical)
+        ? data.medical.filter(
+            (item: unknown) => typeof item === 'string',
+          )
+        : [
+            'Medical triage is temporarily unavailable.',
+          ];
 
-      const medicalData =
-        Array.isArray(data.medical)
-          ? data.medical.filter(
-              (item: unknown) =>
-                typeof item === 'string',
-            )
-          : [
-              'Medical triage is temporarily unavailable.',
-            ];
+      const navigationData = isRecord(data.navigation)
+        ? data.navigation
+        : {};
 
       const navigationText =
-        data.navigation?.text ||
+        navigationData.text ||
         data.navigationText ||
         'Navigation result unavailable.';
 
       const navigationCoords =
-        data.navigation?.destCoords ??
+        navigationData.destCoords ??
         data.destCoords ??
         null;
 
       const navigationIsReal =
-        data.navigation?.isRealData === true ||
+        navigationData.isRealData === true ||
         data.isRealData === true;
+
+      // New multi-facility navigation contract.
+      // Keep compatibility with both nested and top-level API fields.
+      const facilities = isRecord(data.facilities)
+        ? data.facilities
+        : isRecord(navigationData.facilities)
+          ? navigationData.facilities
+          : {
+              hospital:
+                navigationData.hospital ??
+                data.hospital ??
+                null,
+              bunker:
+                navigationData.bunker ??
+                data.bunker ??
+                null,
+            };
+
+      const routes = isRecord(data.routes)
+        ? data.routes
+        : isRecord(navigationData.routes)
+          ? navigationData.routes
+          : {};
 
       const vaultResult =
         typeof data.vault === 'string'
@@ -570,8 +485,7 @@ export default function HelpBar() {
           : 'Identity standby. Rescue beacon was not generated.';
 
       const evidenceResult =
-        data.evidence &&
-        typeof data.evidence === 'object'
+        isRecord(data.evidence)
           ? data.evidence
           : null;
 
@@ -586,127 +500,112 @@ export default function HelpBar() {
           : [];
 
       const healthMetadata =
-        data.healthMetadata &&
-        typeof data.healthMetadata === 'object'
+        isRecord(data.healthMetadata)
           ? data.healthMetadata
           : null;
 
-      // ------------------------------------------------------
-      // ACTION PANEL EVENT CONTRACT
-      // ------------------------------------------------------
-
+      // Action panel + map event contract.
       const actionData = {
-
-        // Request metadata
+        // Request metadata.
         requestId: data.requestId || null,
         sessionId: data.sessionId || sessionId,
 
-        // Emergency / Radar
-        threatLevel:
-          data.threatLevel || 'UNKNOWN',
+        // Emergency / Radar.
+        threatLevel: data.threatLevel || 'UNKNOWN',
 
         intel:
           typeof data.radarIntel === 'string'
             ? data.radarIntel
             : 'No saved radar intelligence available.',
 
-        // Navigation
+        // Navigation.
         route: navigationText,
-
         destCoords: navigationCoords,
-
         isRealData: navigationIsReal,
 
-        // Medical
+        // New facility and route payloads.
+        facilities,
+        routes,
+
+        // Compatibility fields.
+        hospital:
+          facilities.hospital ??
+          navigationData.hospital ??
+          data.hospital ??
+          null,
+
+        bunker:
+          facilities.bunker ??
+          navigationData.bunker ??
+          data.bunker ??
+          null,
+
+        // Medical.
         medical: medicalData,
 
-        // Secure identity
+        // Secure identity.
         vault: vaultResult,
 
-        // Verification
+        // Verification.
         evidence: evidenceResult,
 
-        // Public Health
+        // Public Health.
         healthAdvisory:
           data.healthAdvisory ||
           'No public-health advisory is currently available.',
 
         officialAlerts,
-
         outbreakReports,
-
         healthMetadata,
 
-        // Resilience
+        // Resilience.
         resiliencePrediction:
           data.resiliencePrediction ||
           'Resilience engine standing by.',
       };
 
-      // ------------------------------------------------------
-      // BROADCAST TO THE MAP AND ACTION PANEL
-      // ------------------------------------------------------
-
+      // Broadcast complete payload to map and action panel.
       window.dispatchEvent(
-        new CustomEvent(
-          'SWARM_INTEL_UPDATE',
-          {
-            detail: actionData,
-          },
-        ),
+        new CustomEvent('SWARM_INTEL_UPDATE', {
+          detail: actionData,
+        }),
       );
 
-      // ------------------------------------------------------
-      // SUCCESS STATE
-      // ------------------------------------------------------
-
+      // Success state.
       setChatLog({
         role: 'ai',
-
         text:
           'ChayRa crisis fleet execution completed. Tactical intelligence has been delivered to the dashboard.',
-
         brain: 'Amazon Bedrock Central Brain',
-
         circuitTripped: null,
       });
 
       setInput('');
-
     } catch (error) {
-
       console.error(
         '[HelpBar]: Rescue protocol failed.',
         error,
       );
 
-      const message =
+      const errorMessage =
         error instanceof Error
           ? error.message
           : 'Critical network failure.';
 
       setChatLog({
         role: 'error',
-        text: message,
+        text: errorMessage,
       });
 
-      // Preserve the original input on failure
-      // so the user can retry without retyping.
-
+      // Keep original input so the user can retry.
     } finally {
-
       setIsProcessing(false);
     }
   }
 
-  // ==========================================================
-  // 9. PIN DROPPED EVENT
-  // ==========================================================
-
+  // 9. Pin dropped event.
   useEffect(() => {
-
     const handlePinDropped = (event: Event) => {
-
       const customEvent =
         event as CustomEvent<Coordinates>;
 
@@ -719,12 +618,10 @@ export default function HelpBar() {
         });
 
         setIsPinDropMode(false);
-
         return;
       }
 
       setUserCoords(coords);
-
       setIsPinDropMode(false);
 
       if (input.trim()) {
@@ -746,33 +643,23 @@ export default function HelpBar() {
         handlePinDropped,
       );
     };
-
   }, [input, isProcessing]);
 
-  // ==========================================================
-  // 10. UI
-  // ==========================================================
-
+  // 10. UI.
   return (
     <div className="w-full flex flex-col relative z-10 bg-[#0a0714]/80 backdrop-blur-3xl border border-violet-500/10 rounded-[22px] p-2 gap-2 transition-all shadow-2xl">
-
       <div className="absolute inset-0 bg-gradient-to-t from-red-500/5 to-transparent rounded-3xl pointer-events-none"></div>
 
       {/* LOCATION BAR */}
-
       <div className="w-full flex items-center justify-between px-3 py-2 border-b border-white/5 relative z-10">
-
         {!userCoords && !isPinDropMode ? (
-
           <div className="flex flex-row w-full items-center justify-between gap-2">
-
             <span className="text-gray-400 font-mono text-xs flex items-center gap-2 group-hover:text-gray-300 transition-colors">
               <MapPin className="w-4 h-4 text-red-500 animate-bounce drop-shadow-[0_0_8px_rgba(220,38,38,0.8)]" />
               LOCATION STANDBY
             </span>
 
             <div className="flex gap-2 w-auto justify-end">
-
               <button
                 onClick={fetchLiveLocation}
                 disabled={isProcessing}
@@ -790,14 +677,10 @@ export default function HelpBar() {
                 <MapPin className="w-3 h-3" />
                 DROP PIN
               </button>
-
             </div>
           </div>
-
         ) : isPinDropMode ? (
-
           <div className="flex flex-row w-full items-center justify-between gap-2">
-
             <span className="text-purple-400 font-mono text-xs animate-pulse flex items-center gap-2 drop-shadow-[0_0_8px_rgba(168,85,247,0.6)]">
               <MapPin className="w-4 h-4" />
               AWAITING TACTICAL PIN...
@@ -810,13 +693,9 @@ export default function HelpBar() {
               <X className="w-3 h-3" />
               CANCEL
             </button>
-
           </div>
-
         ) : (
-
           <div className="flex flex-row w-full items-center justify-between gap-2">
-
             <span className="text-emerald-400 font-mono text-xs flex items-center gap-2 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]">
               <MapPin className="w-4 h-4" />
               LOCKED: {userCoords?.lat.toFixed(3)}, {userCoords?.lng.toFixed(3)}
@@ -830,22 +709,16 @@ export default function HelpBar() {
               <RotateCcw className="w-3 h-3" />
               RESET
             </button>
-
           </div>
         )}
-
       </div>
 
       {/* LOCATION PROMPT */}
-
       {showLocationPrompt && (
-
         <div className="absolute bottom-[110%] left-1/2 -translate-x-1/2 w-full max-w-md bg-black/95 backdrop-blur-3xl border border-red-500/50 p-6 rounded-2xl shadow-[0_0_50px_rgba(220,38,38,0.4)] animate-in slide-in-from-bottom-4 z-50">
-
           <div className="absolute inset-0 bg-gradient-to-b from-red-500/5 to-transparent rounded-2xl pointer-events-none"></div>
 
           <div className="flex justify-between items-start mb-4 relative z-10">
-
             <div>
               <h3 className="text-red-500 font-bold tracking-widest text-sm flex items-center gap-2 drop-shadow-[0_0_8px_rgba(220,38,38,0.8)]">
                 <MapPin className="w-4 h-4 animate-bounce" />
@@ -863,11 +736,9 @@ export default function HelpBar() {
             >
               <X className="w-5 h-5" />
             </button>
-
           </div>
 
           <div className="flex flex-col gap-3 mt-4 relative z-10">
-
             <button
               onClick={fetchLiveLocation}
               className="flex items-center justify-between p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 hover:border-blue-400/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)] transition-all group"
@@ -890,7 +761,6 @@ export default function HelpBar() {
             >
               <div className="flex items-center gap-3">
                 <MapPin className="text-purple-500 w-5 h-5 group-hover:animate-bounce" />
-
                 <span className="text-purple-100 font-mono text-sm">
                   DROP TACTICAL PIN
                 </span>
@@ -900,116 +770,98 @@ export default function HelpBar() {
                 [MANUAL]
               </span>
             </button>
-
           </div>
         </div>
       )}
 
       {/* CHAT STATUS */}
-
       {chatLog && (
-
         <div className="w-full bg-black/60 backdrop-blur-md border border-white/10 p-3 rounded-xl relative overflow-hidden transition-all animate-in fade-in slide-in-from-bottom-2 mx-1 mt-1 shadow-[0_0_20px_rgba(16,185,129,0.05)] max-h-[160px] overflow-y-auto">
+          <div
+            className={`absolute top-0 left-0 w-[2px] h-full ${
+              chatLog.role === 'error'
+                ? 'bg-red-500 shadow-[0_0_15px_rgba(220,38,38,1)]'
+                : 'bg-gradient-to-b from-transparent via-emerald-500 to-transparent shadow-[0_0_15px_rgba(16,185,129,1)]'
+            }`}
+          ></div>
 
-          <div className={`absolute top-0 left-0 w-[2px] h-full ${
-            chatLog.role === 'error'
-              ? 'bg-red-500 shadow-[0_0_15px_rgba(220,38,38,1)]'
-              : 'bg-gradient-to-b from-transparent via-emerald-500 to-transparent shadow-[0_0_15px_rgba(16,185,129,1)]'
-          }`}></div>
-
-          {(isProcessing || chatLog.role === 'ai') && !isPinDropMode && (
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3 pb-3 border-b border-white/5 relative z-10">
-
-              <div className="flex flex-col gap-1 p-2 bg-black/40 border border-emerald-500/20 rounded-lg shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]">
-
-                <span className="text-[9px] text-emerald-500 font-bold tracking-widest flex items-center gap-1.5">
-                  <Cpu className="w-3.5 h-3.5" />
-                  SYSTEM BRAIN
-                </span>
-
-                <span className="text-[10px] font-mono text-gray-300 mt-1">
-                  {isProcessing
-                    ? 'REQUEST SENT — EXECUTING SWARM...'
-                    : `Primary: ${chatLog.brain || 'Brain Gateway'}`}
-                </span>
-
-                {chatLog.circuitTripped && !isProcessing && (
-
-                  <span className="text-[9px] font-mono text-amber-400 mt-1 flex items-start gap-1 bg-amber-500/10 p-1 rounded border border-amber-500/20">
-                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                    {chatLog.circuitTripped}
+          {(isProcessing || chatLog.role === 'ai') &&
+            !isPinDropMode && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3 pb-3 border-b border-white/5 relative z-10">
+                <div className="flex flex-col gap-1 p-2 bg-black/40 border border-emerald-500/20 rounded-lg shadow-[inset_0_0_15px_rgba(16,185,129,0.05)]">
+                  <span className="text-[9px] text-emerald-500 font-bold tracking-widest flex items-center gap-1.5">
+                    <Cpu className="w-3.5 h-3.5" />
+                    SYSTEM BRAIN
                   </span>
 
-                )}
+                  <span className="text-[10px] font-mono text-gray-300 mt-1">
+                    {isProcessing
+                      ? 'REQUEST SENT — EXECUTING SWARM...'
+                      : `Primary: ${chatLog.brain || 'Brain Gateway'}`}
+                  </span>
 
+                  {chatLog.circuitTripped && !isProcessing && (
+                    <span className="text-[9px] font-mono text-amber-400 mt-1 flex items-start gap-1 bg-amber-500/10 p-1 rounded border border-amber-500/20">
+                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                      {chatLog.circuitTripped}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-1 p-2 bg-black/40 border border-blue-500/20 rounded-lg shadow-[inset_0_0_15px_rgba(59,130,246,0.05)] overflow-hidden">
+                  <span className="text-[9px] text-blue-500 font-bold tracking-widest flex items-center gap-1.5">
+                    {isProcessing
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <ShieldCheck className="w-3 h-3" />}
+
+                    {isProcessing
+                      ? 'SERVER ORCHESTRATING'
+                      : 'SWARM STATUS'}
+                  </span>
+
+                  <span
+                    className={`text-[10px] font-mono mt-1 ${
+                      isProcessing
+                        ? 'text-blue-300'
+                        : 'text-emerald-400'
+                    }`}
+                  >
+                    {isProcessing
+                      ? 'Waiting for server response...'
+                      : 'REQUEST COMPLETED'}
+                  </span>
+                </div>
               </div>
-
-              <div className="flex flex-col gap-1 p-2 bg-black/40 border border-blue-500/20 rounded-lg shadow-[inset_0_0_15px_rgba(59,130,246,0.05)] overflow-hidden">
-
-                <span className="text-[9px] text-blue-500 font-bold tracking-widest flex items-center gap-1.5">
-
-                  {isProcessing
-                    ? <Loader2 className="w-3 h-3 animate-spin" />
-                    : <ShieldCheck className="w-3 h-3" />}
-
-                  {isProcessing
-                    ? 'SERVER ORCHESTRATING'
-                    : 'SWARM STATUS'}
-
-                </span>
-
-                <span className={`text-[10px] font-mono mt-1 ${
-                  isProcessing
-                    ? 'text-blue-300'
-                    : 'text-emerald-400'
-                }`}>
-                  {isProcessing
-                    ? 'Waiting for server response...'
-                    : 'REQUEST COMPLETED'}
-                </span>
-
-              </div>
-
-            </div>
-          )}
+            )}
 
           <div className="font-mono text-[11px] md:text-xs text-gray-300 leading-relaxed pl-2 relative z-10">
-
             {chatLog.role === 'user' ? (
-
               <span className="text-gray-500">
-                &gt;&gt; TX:
-                {' '}
+                &gt;&gt; TX:{' '}
                 <span className="text-gray-200">
                   {chatLog.text}
                 </span>
               </span>
-
             ) : chatLog.role === 'error' ? (
-
               <span className="text-red-400">
                 {chatLog.text}
               </span>
-
             ) : (
-
-              <span className={isPinDropMode
-                ? 'text-purple-400 animate-pulse'
-                : 'text-emerald-100/90'
-              }>
+              <span
+                className={
+                  isPinDropMode
+                    ? 'text-purple-400 animate-pulse'
+                    : 'text-emerald-100/90'
+                }
+              >
                 {chatLog.text}
               </span>
-
             )}
-
           </div>
-
         </div>
       )}
 
       {/* INPUT BAR */}
-
       <div
         className={`w-full rounded-2xl p-1.5 md:p-2 flex items-center gap-1.5 md:gap-3 transition-all duration-300 mt-1 ${
           isPinDropMode
@@ -1017,7 +869,6 @@ export default function HelpBar() {
             : 'bg-[#160505] border border-red-500/20 hover:border-red-500/40 shadow-[inset_0_0_15px_rgba(220,38,38,0.03)]'
         }`}
       >
-
         <div
           className={`p-2 md:p-3 rounded-xl border transition-all duration-300 flex-shrink-0 ${
             isPinDropMode
@@ -1061,7 +912,6 @@ export default function HelpBar() {
         />
 
         <div className="flex items-center gap-1 md:gap-2 pr-0 md:pr-1">
-
           <button
             onClick={toggleRecording}
             disabled={isProcessing || isPinDropMode}
@@ -1096,7 +946,6 @@ export default function HelpBar() {
                     <span className="hidden md:inline">
                       INITIATE RESCUE
                     </span>
-
                     <span className="md:hidden">
                       Help
                     </span>
@@ -1107,50 +956,36 @@ export default function HelpBar() {
               <Send className="w-3 h-3 md:w-3.5 md:h-3.5 ml-0 md:ml-1" />
             )}
           </button>
-
         </div>
       </div>
 
       {/* STATUS FOOTER */}
-
       <div className="hidden md:flex w-full items-center justify-between gap-3 text-[10px] font-mono text-gray-500 px-2 pt-2 mt-1 border-t border-white/5 whitespace-nowrap overflow-hidden">
-
         <div className="flex items-center gap-2 md:gap-4 shrink-0">
-
           {isProcessing ? (
-
             <span className="flex items-center gap-1.5 md:gap-2 text-amber-400 text-[8px] md:text-[10px]">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
               ORCHESTRATING...
             </span>
-
           ) : isListening ? (
-
             <span className="flex items-center gap-1.5 md:gap-2 text-red-500 animate-pulse text-[8px] md:text-[10px]">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
               INTERCEPTING...
             </span>
-
           ) : isPinDropMode ? (
-
             <span className="flex items-center gap-1.5 md:gap-2 text-purple-400 text-[8px] md:text-[10px]">
               <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>
               AWAITING COORDS
             </span>
-
           ) : (
-
             <span className="flex items-center gap-1.5 md:gap-2 text-emerald-500/80 text-[8px] md:text-[10px]">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
               CLIENT READY
             </span>
-
           )}
-
         </div>
 
         <div className="flex items-center gap-1 shrink-0 overflow-hidden">
-
           <span className="hidden lg:inline text-[10px] font-mono text-gray-400 tracking-widest">
             A PRODUCT OF
           </span>
@@ -1158,14 +993,11 @@ export default function HelpBar() {
           <span className="text-[9px] md:text-[11px] font-bold tracking-[0.1em] md:tracking-[0.15em] text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400 drop-shadow-[0_0_8px_rgba(139,92,246,0.4)] truncate">
             RANAJIT DHAR
           </span>
-
         </div>
 
         <div className="flex items-center gap-4 opacity-80 shrink-0">
-
           <span className="flex items-center gap-1.5 text-cyan-400/90">
             <Clock3 className="w-3.5 h-3.5" />
-
             <span className={latency ? 'text-cyan-300' : 'text-gray-600'}>
               {latency !== null ? `${latency}ms` : '--'}
             </span>
@@ -1179,9 +1011,7 @@ export default function HelpBar() {
               {isProcessing ? 'BUSY' : 'READY'}
             </span>
           </span>
-
         </div>
-
       </div>
     </div>
   );

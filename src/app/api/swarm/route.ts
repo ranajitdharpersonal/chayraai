@@ -8,10 +8,6 @@ import { createUserContent } from '@google/genai';
 import { PredictiveMemoryBank } from '@/core/adk/memory';
 import { chayRaCrisisFleet } from '@/core/adk/runtime';
 
-// ============================================================
-// SPECIALIST AGENT REGISTRATION
-// ============================================================
-
 import '@/core/agents/mindguard';
 import '@/core/agents/scavenger';
 import '@/core/agents/radar';
@@ -21,17 +17,11 @@ import '@/core/agents/publicHealth';
 import '@/core/agents/vault';
 import '@/core/agents/verifier';
 
-// ============================================================
-// RUNTIME CONFIGURATION
-// ============================================================
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const APP_NAME = 'chayra-enterprise-fleet';
-
 const DEFAULT_USER_ID = 'chayra-web-guest';
-
 const MAX_MESSAGE_LENGTH = 20_000;
 
 const VALID_THREAT_LEVELS = [
@@ -47,16 +37,9 @@ type Coordinates = {
 };
 
 type AgentResults = Record<string, any>;
-
 type JsonRecord = Record<string, any>;
 
-// ============================================================
-// REQUEST HELPERS
-// ============================================================
-
-function isRecord(
-  value: unknown,
-): value is JsonRecord {
+function isRecord(value: unknown): value is JsonRecord {
   return Boolean(
     value &&
     typeof value === 'object' &&
@@ -64,9 +47,7 @@ function isRecord(
   );
 }
 
-function isValidUUID(
-  value: unknown,
-): value is string {
+function isValidUUID(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -75,13 +56,7 @@ function isValidUUID(
   );
 }
 
-function resolveSessionId(
-  value: unknown,
-): string {
-  // Accept only UUID session identifiers.
-  // Old static identifiers such as demo-session-2026
-  // are replaced with new unique identifiers.
-
+function resolveSessionId(value: unknown): string {
   if (isValidUUID(value)) {
     return value.toLowerCase();
   }
@@ -96,15 +71,11 @@ function validateCoordinates(
   coordinates?: Coordinates;
 } {
   if (value === undefined || value === null) {
-    return {
-      valid: true,
-    };
+    return { valid: true };
   }
 
   if (!isRecord(value)) {
-    return {
-      valid: false,
-    };
+    return { valid: false };
   }
 
   const lat = value.lat;
@@ -120,23 +91,38 @@ function validateCoordinates(
     lng < -180 ||
     lng > 180
   ) {
-    return {
-      valid: false,
-    };
+    return { valid: false };
   }
 
   return {
     valid: true,
-    coordinates: {
-      lat,
-      lng,
-    },
+    coordinates: { lat, lng },
   };
 }
 
-function getSafeThreatLevel(
-  value: unknown,
-): string {
+function hasFacilityCoordinates(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const nested = isRecord(value.coordinates)
+    ? value.coordinates
+    : {};
+
+  const lat = value.lat ?? nested.lat;
+  const lng = value.lng ?? nested.lng;
+
+  return (
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180
+  );
+}
+
+function getSafeThreatLevel(value: unknown): string {
   const level = String(value ?? '')
     .trim()
     .toUpperCase();
@@ -159,10 +145,6 @@ function resolveAgentResult(
     null
   );
 }
-
-// ============================================================
-// ADK EVENT EXTRACTION
-// ============================================================
 
 function extractEventResult(
   event: any,
@@ -203,13 +185,7 @@ function extractEventResult(
       result: JSON.parse(text),
     };
   } catch {
-    // Radar and Vault intentionally return plain text.
-    // Other agents must return structured JSON.
-
-    if (
-      author === 'Radar' ||
-      author === 'Vault'
-    ) {
+    if (author === 'Radar' || author === 'Vault') {
       return {
         author,
         result: text,
@@ -224,10 +200,6 @@ function extractEventResult(
   }
 }
 
-// ============================================================
-// SAFE DEFAULT RESULTS
-// ============================================================
-
 function getDefaultMedicalResult(): string[] {
   return [
     'Stay calm and assess the immediate situation.',
@@ -239,13 +211,21 @@ function getDefaultMedicalResult(): string[] {
 function getDefaultNavigationResult() {
   return {
     text:
-      'Navigation result unavailable. Enable GPS or provide a tactical pin to search for verified facilities.',
+      'Navigation result unavailable. Enable GPS or provide a tactical pin to search for mapped facilities.',
     destCoords: null,
     isRealData: false,
     lookupStatus: 'UNAVAILABLE',
     facility: null,
     hospital: null,
     bunker: null,
+    facilities: {
+      hospital: null,
+      bunker: null,
+    },
+    routes: {
+      hospital: null,
+      bunker: null,
+    },
   };
 }
 
@@ -261,10 +241,6 @@ function getDefaultEvidence() {
   };
 }
 
-// ============================================================
-// MAIN SWARM API
-// ============================================================
-
 export async function POST(req: Request) {
   const requestId = randomUUID();
 
@@ -273,11 +249,7 @@ export async function POST(req: Request) {
   );
 
   try {
-
-    // --------------------------------------------------------
-    // 1. PARSE REQUEST BODY
-    // --------------------------------------------------------
-
+    // 1. Parse request body.
     let payload: JsonRecord;
 
     try {
@@ -294,7 +266,6 @@ export async function POST(req: Request) {
       }
 
       payload = parsed;
-
     } catch {
       return NextResponse.json(
         {
@@ -305,10 +276,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // --------------------------------------------------------
-    // 2. VALIDATE USER INPUT
-    // --------------------------------------------------------
-
+    // 2. Validate user input.
     if (
       typeof payload.message !== 'string' ||
       !payload.message.trim()
@@ -335,10 +303,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // --------------------------------------------------------
-    // 3. VALIDATE GPS COORDINATES
-    // --------------------------------------------------------
-
+    // 3. Validate GPS coordinates.
     const coordinateResult =
       validateCoordinates(payload.coords);
 
@@ -353,13 +318,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const userCoords =
-      coordinateResult.coordinates;
+    const userCoords = coordinateResult.coordinates;
 
-    // --------------------------------------------------------
-    // 4. RESOLVE UNIQUE SESSION
-    // --------------------------------------------------------
-
+    // 4. Resolve unique session.
     const activeSessionId =
       resolveSessionId(payload.sessionId);
 
@@ -369,10 +330,7 @@ export async function POST(req: Request) {
       `[ADK API]: Session initialized. Session=${activeSessionId}`,
     );
 
-    // --------------------------------------------------------
-    // 5. INITIALIZE ADK RUNNER
-    // --------------------------------------------------------
-
+    // 5. Initialize ADK runner.
     const runner = new InMemoryRunner({
       agent: chayRaCrisisFleet,
       appName: APP_NAME,
@@ -382,12 +340,9 @@ export async function POST(req: Request) {
       appName: APP_NAME,
       userId,
       sessionId: activeSessionId,
-
       state: {
         userCoords,
-
         radarIntel: null,
-
         context: {
           source: 'chayra-web',
           requestId,
@@ -396,18 +351,10 @@ export async function POST(req: Request) {
       },
     });
 
-    // --------------------------------------------------------
-    // 6. PREPARE USER MESSAGE
-    // --------------------------------------------------------
+    // 6. Prepare user message.
+    const newMessage = createUserContent(message);
 
-    const newMessage = createUserContent(
-      message,
-    );
-
-    // --------------------------------------------------------
-    // 7. EXECUTE CRISIS FLEET
-    // --------------------------------------------------------
-
+    // 7. Execute crisis fleet.
     const eventResults: AgentResults = {};
 
     console.log(
@@ -426,16 +373,12 @@ export async function POST(req: Request) {
           ? event.author
           : 'unknown';
 
-      console.log(
-        `[ADK Event]: ${author}`,
-      );
+      console.log(`[ADK Event]: ${author}`);
 
-      const extracted =
-        extractEventResult(event);
+      const extracted = extractEventResult(event);
 
       if (extracted) {
-        eventResults[extracted.author] =
-          extracted.result;
+        eventResults[extracted.author] = extracted.result;
       }
     }
 
@@ -443,10 +386,7 @@ export async function POST(req: Request) {
       '[ADK API]: Agent execution completed.',
     );
 
-    // --------------------------------------------------------
-    // 8. RETRIEVE COMPLETED ADK SESSION
-    // --------------------------------------------------------
-
+    // 8. Retrieve completed ADK session.
     const completedSession =
       await runner.sessionService.getSession({
         appName: APP_NAME,
@@ -460,21 +400,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const sessionState =
-      isRecord(completedSession.state)
-        ? completedSession.state
-        : {};
+    const sessionState = isRecord(completedSession.state)
+      ? completedSession.state
+      : {};
 
-    // --------------------------------------------------------
-    // 9. MINDGUARD RESULT
-    // --------------------------------------------------------
-
-    const mindGuardResult =
-      resolveAgentResult(
-        eventResults,
-        sessionState,
-        'MindGuard',
-      );
+    // 9. MindGuard result.
+    const mindGuardResult = resolveAgentResult(
+      eventResults,
+      sessionState,
+      'MindGuard',
+    );
 
     if (
       mindGuardResult?.isEmergency === false ||
@@ -487,11 +422,9 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           type: 'spam',
-
           message:
             mindGuardResult.reason ||
             'Request rejected by basic input validation.',
-
           requestId,
         },
         {
@@ -502,67 +435,47 @@ export async function POST(req: Request) {
       );
     }
 
-    // --------------------------------------------------------
-    // 10. SCAVENGER RESULT
-    // --------------------------------------------------------
+    // 10. Scavenger result.
+    const scavengerResult = resolveAgentResult(
+      eventResults,
+      sessionState,
+      'Scavenger',
+    );
 
-    const scavengerResult =
-      resolveAgentResult(
-        eventResults,
-        sessionState,
-        'Scavenger',
-      );
+    const threatLevel = getSafeThreatLevel(
+      scavengerResult?.threatLevel,
+    );
 
-    const threatLevel =
-      getSafeThreatLevel(
-        scavengerResult?.threatLevel,
-      );
+    // 11. Radar result.
+    const radarIntel = resolveAgentResult(
+      eventResults,
+      sessionState,
+      'Radar',
+    );
 
-    // --------------------------------------------------------
-    // 11. RADAR RESULT
-    // --------------------------------------------------------
+    // 12. Medical result.
+    const rawMedicalData = resolveAgentResult(
+      eventResults,
+      sessionState,
+      'Medical',
+    );
 
-    const radarIntel =
-      resolveAgentResult(
-        eventResults,
-        sessionState,
-        'Radar',
-      );
+    const medicalData = Array.isArray(rawMedicalData)
+      ? rawMedicalData.filter(
+          (item: unknown) => typeof item === 'string',
+        )
+      : getDefaultMedicalResult();
 
-    // --------------------------------------------------------
-    // 12. MEDICAL RESULT
-    // --------------------------------------------------------
+    // 13. Navigator result.
+    const rawNavigationData = resolveAgentResult(
+      eventResults,
+      sessionState,
+      'Navigator',
+    );
 
-    const rawMedicalData =
-      resolveAgentResult(
-        eventResults,
-        sessionState,
-        'Medical',
-      );
-
-    const medicalData =
-      Array.isArray(rawMedicalData)
-        ? rawMedicalData.filter(
-            (item: unknown) =>
-              typeof item === 'string',
-          )
-        : getDefaultMedicalResult();
-
-    // --------------------------------------------------------
-    // 13. NAVIGATOR RESULT
-    // --------------------------------------------------------
-
-    const rawNavigationData =
-      resolveAgentResult(
-        eventResults,
-        sessionState,
-        'Navigator',
-      );
-
-    const navigationData =
-      isRecord(rawNavigationData)
-        ? rawNavigationData
-        : getDefaultNavigationResult();
+    const navigationData = isRecord(rawNavigationData)
+      ? rawNavigationData
+      : getDefaultNavigationResult();
 
     const resolvedDestCoords =
       navigationData.destCoords ?? null;
@@ -575,37 +488,59 @@ export async function POST(req: Request) {
     const resolvedIsRealData =
       navigationData.isRealData === true;
 
-    // --------------------------------------------------------
-    // 14. VAULT RESULT
-    // --------------------------------------------------------
+    // Keep the new multi-facility contract while preserving
+    // the legacy hospital/bunker fields for older UI consumers.
+    const resolvedFacilities = isRecord(
+      navigationData.facilities,
+    )
+      ? navigationData.facilities
+      : {
+          hospital: navigationData.hospital ?? null,
+          bunker: navigationData.bunker ?? null,
+        };
 
-    const rawVaultData =
-      resolveAgentResult(
-        eventResults,
-        sessionState,
-        'Vault',
-      );
+    const resolvedRoutes = isRecord(
+      navigationData.routes,
+    )
+      ? navigationData.routes
+      : {
+          hospital: null,
+          bunker: null,
+        };
+
+    const hospitalFacility =
+      resolvedFacilities.hospital ?? null;
+
+    const bunkerFacility =
+      resolvedFacilities.bunker ?? null;
+
+    const facilityCoordinateCount = [
+      hospitalFacility,
+      bunkerFacility,
+    ].filter(hasFacilityCoordinates).length;
+
+    // 14. Vault result.
+    const rawVaultData = resolveAgentResult(
+      eventResults,
+      sessionState,
+      'Vault',
+    );
 
     const vaultData =
       typeof rawVaultData === 'string'
         ? rawVaultData
         : 'Identity standby. Rescue beacon was not generated in this cycle.';
 
-    // --------------------------------------------------------
-    // 15. PUBLIC HEALTH RESULT
-    // --------------------------------------------------------
+    // 15. Public Health result.
+    const rawHealthData = resolveAgentResult(
+      eventResults,
+      sessionState,
+      'PublicHealth',
+    );
 
-    const rawHealthData =
-      resolveAgentResult(
-        eventResults,
-        sessionState,
-        'PublicHealth',
-      );
-
-    const healthData =
-      isRecord(rawHealthData)
-        ? rawHealthData
-        : null;
+    const healthData = isRecord(rawHealthData)
+      ? rawHealthData
+      : null;
 
     const healthAdvisory =
       typeof healthData?.healthAdvisory === 'string'
@@ -625,39 +560,28 @@ export async function POST(req: Request) {
     const healthMetadata =
       healthData?.metadata ?? null;
 
-    // --------------------------------------------------------
-    // 16. VERIFIER RESULT
-    // --------------------------------------------------------
+    // 16. Verifier result.
+    const rawEvidence = resolveAgentResult(
+      eventResults,
+      sessionState,
+      'Verifier',
+    );
 
-    const rawEvidence =
-      resolveAgentResult(
-        eventResults,
-        sessionState,
-        'Verifier',
-      );
+    const evidencePanel = isRecord(rawEvidence)
+      ? rawEvidence
+      : getDefaultEvidence();
 
-    const evidencePanel =
-      isRecord(rawEvidence)
-        ? rawEvidence
-        : getDefaultEvidence();
-
-    // --------------------------------------------------------
-    // 17. SAVE PERSISTENT MEMORY
-    // --------------------------------------------------------
-
+    // 17. Save persistent memory.
     try {
       await PredictiveMemoryBank.saveSituationState(
         activeSessionId,
         {
           lastInput: message,
-
           threatLevel,
-
           intel:
             typeof radarIntel === 'string'
               ? radarIntel
               : JSON.stringify(radarIntel ?? 'NONE'),
-
           timestamp: new Date().toISOString(),
         },
       );
@@ -665,21 +589,14 @@ export async function POST(req: Request) {
       console.log(
         '[ADK API]: Session memory persistence completed.',
       );
-
     } catch (memoryError) {
-
-      // Memory failure must not cancel the completed rescue result.
-
       console.error(
         '[ADK API]: Memory persistence failed. Returning the completed swarm response.',
         memoryError,
       );
     }
 
-    // --------------------------------------------------------
-    // 18. RESILIENCE PREDICTION
-    // --------------------------------------------------------
-
+    // 18. Resilience prediction.
     let resiliencePrediction =
       'Resilience engine standing by.';
 
@@ -692,9 +609,7 @@ export async function POST(req: Request) {
           await PredictiveMemoryBank.predictThreatEvolution(
             activeSessionId,
           );
-
       } catch (predictionError) {
-
         console.error(
           '[ADK API]: Resilience prediction failed.',
           predictionError,
@@ -705,17 +620,20 @@ export async function POST(req: Request) {
       }
     }
 
-    // --------------------------------------------------------
-    // 19. RESPONSE DIAGNOSTICS
-    // --------------------------------------------------------
+    // 19. Response diagnostics.
+    const routeTypes = Object.values(resolvedRoutes)
+      .filter(isRecord)
+      .map((route: JsonRecord) =>
+        typeof route.routeType === 'string'
+          ? route.routeType
+          : 'UNKNOWN',
+      );
 
     console.log(
       '[ADK API]: Crisis fleet response prepared.',
       {
         requestId,
-
         threatLevel,
-
         agents: {
           mindGuard: Boolean(mindGuardResult),
           scavenger: Boolean(scavengerResult),
@@ -726,26 +644,24 @@ export async function POST(req: Request) {
           publicHealth: Boolean(healthData),
           verifier: Boolean(rawEvidence),
         },
-
         navigation: {
-          hasCoordinates: Boolean(resolvedDestCoords),
+          hasUserCoordinates: Boolean(userCoords),
+          hasPrimaryDestination: hasFacilityCoordinates(
+            resolvedDestCoords,
+          ),
+          facilityCoordinateCount,
+          routeTypes,
           isRealData: resolvedIsRealData,
         },
       },
     );
 
-    // --------------------------------------------------------
-    // 20. FINAL RESPONSE
-    // --------------------------------------------------------
-
+    // 20. Final response.
     return NextResponse.json(
       {
         type: 'success',
-
         requestId,
-
         sessionId: activeSessionId,
-
         threatLevel,
 
         // Radar
@@ -754,14 +670,18 @@ export async function POST(req: Request) {
         // Medical
         medical: medicalData,
 
-        // Navigation
+        // Navigation: preserve legacy payload and expose
+        // facilities/routes as first-class response fields.
         navigation: navigationData,
-
         navigationText: resolvedNavigationText,
-
         destCoords: resolvedDestCoords,
-
         isRealData: resolvedIsRealData,
+        facilities: resolvedFacilities,
+        routes: resolvedRoutes,
+
+        // Legacy facility fields
+        hospital: hospitalFacility,
+        bunker: bunkerFacility,
 
         // Vault
         vault: vaultData,
@@ -771,11 +691,8 @@ export async function POST(req: Request) {
 
         // Public Health
         healthAdvisory,
-
         officialAlerts,
-
         outbreakReports,
-
         healthMetadata,
 
         // Predictive Memory
@@ -787,9 +704,7 @@ export async function POST(req: Request) {
         },
       },
     );
-
   } catch (error) {
-
     console.error(
       '[ADK Swarm Orchestrator]: Critical execution failure.',
       {
@@ -801,16 +716,12 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         type: 'error',
-
         requestId,
-
         message:
           'ChayRa could not complete the crisis request. Please retry.',
-
       },
       {
         status: 500,
-
         headers: {
           'Cache-Control': 'no-store',
         },
