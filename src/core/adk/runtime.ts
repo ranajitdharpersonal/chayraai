@@ -1,31 +1,98 @@
+
 import {
   BaseAgent,
   InvocationContext,
 } from '@google/adk';
+
 import type { Event } from '@google/adk';
+
 import { EnterpriseAgentRegistry } from './registry';
+
+// ============================================================
+// TYPES
+// ============================================================
+
+type Coordinates = {
+  lat: number;
+  lng: number;
+};
 
 type AgentHandler = (data: any) => Promise<any>;
 
+type SpecialistAgent = {
+  name: string;
+  agent: ChayRaAgentAdapter;
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+
 function getHandler(name: string): AgentHandler {
-  const handler = EnterpriseAgentRegistry.getAgent(name);
+  const handler =
+    EnterpriseAgentRegistry.getAgent(name);
 
   if (!handler) {
     throw new Error(
-      `[ADK Runtime] Agent '${name}' is unavailable.`
+      `[ADK Runtime] Agent '${name}' is unavailable.`,
     );
   }
 
   return handler as AgentHandler;
 }
 
-/**
- * Adapter:
- * Wraps an existing ChayRa registry handler as a real ADK BaseAgent.
- *
- * This lets us migrate the orchestration layer to Google ADK
- * without rewriting every existing specialist agent at once.
- */
+function isValidCoordinates(
+  value: unknown,
+): value is Coordinates {
+  if (
+    !value ||
+    typeof value !== 'object'
+  ) {
+    return false;
+  }
+
+  const coords = value as Record<string, unknown>;
+
+  return (
+    typeof coords.lat === 'number' &&
+    typeof coords.lng === 'number' &&
+    Number.isFinite(coords.lat) &&
+    Number.isFinite(coords.lng) &&
+    coords.lat >= -90 &&
+    coords.lat <= 90 &&
+    coords.lng >= -180 &&
+    coords.lng <= 180
+  );
+}
+
+function normalizeRequiredAgents(
+  value: unknown,
+): string[] {
+  const allowedAgents = [
+    'Medical',
+    'Navigator',
+    'Vault',
+  ];
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value.filter(
+        (agent): agent is string =>
+          typeof agent === 'string' &&
+          allowedAgents.includes(agent),
+      ),
+    ),
+  );
+}
+
+// ============================================================
+// ADK AGENT ADAPTER
+// ============================================================
+
 class ChayRaAgentAdapter extends BaseAgent {
   private handlerName: string;
 
@@ -48,26 +115,28 @@ class ChayRaAgentAdapter extends BaseAgent {
     const input =
       ctx.userContent?.parts?.[0]?.text ?? '';
 
-    const state = ctx.session.state as Record<string, any>;
+    const state =
+      ctx.session.state as Record<string, any>;
 
-    const handler = getHandler(this.handlerName);
+    const handler =
+      getHandler(this.handlerName);
 
     console.log(
-      `[ADK Runtime]: Executing ${this.handlerName} through ADK`
+      `[ADK Runtime]: Executing ${this.handlerName} through ADK.`,
     );
 
-    let result: any;
-
     try {
-      result = await handler({
+      const result = await handler({
         input,
         userCoords: state.userCoords,
         radarIntel: state.radarIntel,
         context: state.context,
       });
 
+      // Save the complete result in ADK session state.
       state[`${this.handlerName}_result`] = result;
 
+      // Forward the complete result to the API event stream.
       yield {
         id: `adk-${this.handlerName}-${Date.now()}`,
         invocationId: ctx.invocationId,
@@ -82,9 +151,10 @@ class ChayRaAgentAdapter extends BaseAgent {
         actions: {},
         timestamp: Date.now(),
       } as Event;
+
     } catch (error) {
       console.error(
-        `[ADK Runtime] ${this.handlerName} failed:`,
+        `[ADK Runtime]: ${this.handlerName} failed.`,
         error,
       );
 
@@ -96,29 +166,15 @@ class ChayRaAgentAdapter extends BaseAgent {
     _ctx: InvocationContext,
   ): AsyncGenerator<Event, void, undefined> {
     throw new Error(
-      `[ADK Runtime] Live streaming is not enabled for ${this.name} yet.`,
+      `[ADK Runtime] Live streaming is not enabled for ${this.name}.`,
     );
   }
 }
 
-/**
- * ChayRa Enterprise Crisis Swarm
- *
- * ADK is now the orchestration root.
- *
- * Flow:
- * MindGuard
- *    ↓
- * Scavenger
- *    ↓
- * Radar
- *    ↓
- * ┌──────────┬───────────┬──────────┐
- * Medical  Navigator  PublicHealth
- * └──────────┴───────────┴──────────┘
- *    ↓
- * Verifier
- */
+// ============================================================
+// CHAYRA ENTERPRISE CRISIS FLEET
+// ============================================================
+
 export class ChayRaCrisisFleet extends BaseAgent {
   private mindGuard: ChayRaAgentAdapter;
   private scavenger: ChayRaAgentAdapter;
@@ -138,25 +194,25 @@ export class ChayRaCrisisFleet extends BaseAgent {
 
     const scavenger = new ChayRaAgentAdapter(
       'Scavenger',
-      'Extracts crisis context and required tactical agents.',
+      'Extracts crisis context and suggests specialist agents.',
       'Scavenger',
     );
 
     const radar = new ChayRaAgentAdapter(
       'Radar',
-      'Reads the latest saved daily global threat snapshot.',
+      'Reads the latest saved global threat snapshot.',
       'Radar',
     );
 
     const medical = new ChayRaAgentAdapter(
       'Medical',
-      'Provides emergency trauma triage guidance.',
+      'Provides emergency medical triage guidance.',
       'Medical',
     );
 
     const navigator = new ChayRaAgentAdapter(
       'Navigator',
-      'Finds nearby hospitals, shelters and tactical destinations.',
+      'Searches nearby hospitals, clinics, shelters and bunkers using user coordinates.',
       'Navigator',
     );
 
@@ -168,7 +224,7 @@ export class ChayRaCrisisFleet extends BaseAgent {
 
     const verifier = new ChayRaAgentAdapter(
       'Verifier',
-      'Cross-checks claims against live radar intelligence.',
+      'Cross-checks user claims against available radar intelligence.',
       'Verifier',
     );
 
@@ -180,8 +236,10 @@ export class ChayRaCrisisFleet extends BaseAgent {
 
     super({
       name: 'ChayRaCrisisFleet',
+
       description:
-        'Autonomous enterprise crisis-response swarm orchestrated by Google ADK.',
+        'Autonomous crisis response fleet orchestrated through Google ADK.',
+
       subAgents: [
         mindGuard,
         scavenger,
@@ -204,183 +262,280 @@ export class ChayRaCrisisFleet extends BaseAgent {
     this.vault = vault;
   }
 
+  // ==========================================================
+  // MAIN EXECUTION
+  // ==========================================================
+
   async *runAsyncImpl(
     ctx: InvocationContext,
   ): AsyncGenerator<Event, void, undefined> {
     console.log(
-      '[ADK Runtime]: Starting ChayRa Enterprise Crisis Fleet...'
+      '[ADK Runtime]: Starting ChayRa Enterprise Crisis Fleet...',
     );
 
-    const state = ctx.session.state as Record<string, any>;
+    const state =
+      ctx.session.state as Record<string, any>;
 
-    // ----------------------------------------------------------
-    // 1. MINDGUARD
-    // ----------------------------------------------------------
+    const userCoords = state.userCoords;
 
-    console.log('[ADK Runtime]: Stage 1 → MindGuard');
+    const hasUserCoordinates =
+      isValidCoordinates(userCoords);
 
-    for await (const event of this.mindGuard.runAsync(ctx)) {
+    console.log(
+      `[ADK Runtime]: Location available: ${hasUserCoordinates}.`,
+    );
+
+    // --------------------------------------------------------
+    // STAGE 1 — MINDGUARD
+    // --------------------------------------------------------
+
+    console.log(
+      '[ADK Runtime]: Stage 1 → MindGuard.',
+    );
+
+    for await (
+      const event of this.mindGuard.runAsync(ctx)
+    ) {
       yield event;
     }
 
     const mindGuardResult =
-      state['MindGuard_result'];
+      state.MindGuard_result;
 
     if (
       mindGuardResult &&
-      mindGuardResult.isEmergency === false &&
-      !String(mindGuardResult.reason ?? '').includes(
-        'Fallback',
-      )
+      mindGuardResult.isEmergency === false
     ) {
-      console.log(
-        '[ADK Runtime]: MindGuard blocked the request.'
+      console.warn(
+        '[ADK Runtime]: MindGuard rejected the request.',
       );
+
       return;
     }
 
-    // ----------------------------------------------------------
-    // 2. SCAVENGER
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STAGE 2 — SCAVENGER
+    // --------------------------------------------------------
 
-    console.log('[ADK Runtime]: Stage 2 → Scavenger');
+    console.log(
+      '[ADK Runtime]: Stage 2 → Scavenger.',
+    );
 
-    for await (const event of this.scavenger.runAsync(ctx)) {
+    for await (
+      const event of this.scavenger.runAsync(ctx)
+    ) {
       yield event;
     }
 
     const scavengerResult =
-      state['Scavenger_result'] ?? {};
+      state.Scavenger_result ?? {};
 
-    const requiredAgents: string[] =
-      Array.isArray(scavengerResult.requiredAgents)
-        ? scavengerResult.requiredAgents
-        : ['Medical', 'Navigator'];
+    // Scavenger may recommend optional agents.
+    const modelRequiredAgents =
+      normalizeRequiredAgents(
+        scavengerResult.requiredAgents,
+      );
 
-    // ----------------------------------------------------------
-    // 3. RADAR
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // MANDATORY AGENT ROUTING
+    // --------------------------------------------------------
 
-    console.log('[ADK Runtime]: Stage 3 → Radar');
+    // Medical is always part of a crisis-response cycle.
+    //
+    // Navigator is mandatory whenever valid user coordinates
+    // exist. A model decision must never silently disable
+    // nearby hospital / shelter / bunker discovery.
 
-    for await (const event of this.radar.runAsync(ctx)) {
+    const requiredAgents = new Set<string>();
+
+    requiredAgents.add('Medical');
+
+    if (hasUserCoordinates) {
+      requiredAgents.add('Navigator');
+    }
+
+    // Vault remains conditional on Scavenger's recommendation.
+    if (modelRequiredAgents.includes('Vault')) {
+      requiredAgents.add('Vault');
+    }
+
+    state.requiredAgents =
+      Array.from(requiredAgents);
+
+    console.log(
+      '[ADK Runtime]: Specialist routing plan:',
+      {
+        modelSuggested: modelRequiredAgents,
+        scheduledAgents: state.requiredAgents,
+        locationAvailable: hasUserCoordinates,
+      },
+    );
+
+    if (!hasUserCoordinates) {
+      console.warn(
+        '[ADK Runtime]: Navigator skipped because valid GPS/pin coordinates are missing.',
+      );
+    }
+
+    // --------------------------------------------------------
+    // STAGE 3 — RADAR
+    // --------------------------------------------------------
+
+    console.log(
+      '[ADK Runtime]: Stage 3 → Radar.',
+    );
+
+    for await (
+      const event of this.radar.runAsync(ctx)
+    ) {
       yield event;
     }
 
     const radarResult =
-      state['Radar_result'];
+      state.Radar_result;
 
     state.radarIntel = radarResult;
 
-    // ----------------------------------------------------------
-    // 4. PARALLEL TACTICAL EXECUTION
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STAGE 4 — PARALLEL SPECIALIST EXECUTION
+    // --------------------------------------------------------
 
-    const parallelTasks: Promise<void>[] = [];
+    console.log(
+      '[ADK Runtime]: Stage 4 → Parallel specialist execution.',
+    );
+
+    const specialists: SpecialistAgent[] = [
+      {
+        name: 'Medical',
+        agent: this.medical,
+      },
+      {
+        name: 'Navigator',
+        agent: this.navigator,
+      },
+      {
+        name: 'Vault',
+        agent: this.vault,
+      },
+      {
+        name: 'PublicHealth',
+        agent: this.publicHealth,
+      },
+    ];
+
     const parallelEvents: Event[] = [];
 
-    if (requiredAgents.includes('Medical')) {
-      parallelTasks.push(
-        (async () => {
+    const parallelTasks =
+      specialists
+        .filter(specialist => {
+          if (
+            specialist.name === 'PublicHealth'
+          ) {
+            return true;
+          }
+
+          return requiredAgents.has(
+            specialist.name,
+          );
+        })
+        .map(async specialist => {
           console.log(
-            '[ADK Runtime]: Parallel → Medical'
+            `[ADK Runtime]: Parallel → ${specialist.name}.`,
           );
 
-          for await (const event of this.medical.runAsync(ctx)) {
-            parallelEvents.push(event);
+          try {
+            for await (
+              const event of specialist.agent.runAsync(ctx)
+            ) {
+              parallelEvents.push(event);
+            }
+
+            console.log(
+              `[ADK Runtime]: ${specialist.name} completed.`,
+            );
+
+          } catch (error) {
+            // An individual specialist failure should not
+            // prevent the remaining agents from running.
+
+            console.error(
+              `[ADK Runtime]: ${specialist.name} execution failed.`,
+              error,
+            );
           }
-        })(),
-      );
-    }
-
-    if (requiredAgents.includes('Navigator')) {
-      parallelTasks.push(
-        (async () => {
-          console.log(
-            '[ADK Runtime]: Parallel → Navigator'
-          );
-
-          for await (const event of this.navigator.runAsync(ctx)) {
-            parallelEvents.push(event);
-          }
-        })(),
-      );
-    }
-
-    if (requiredAgents.includes('Vault')) {
-      parallelTasks.push(
-        (async () => {
-          console.log(
-            '[ADK Runtime]: Parallel → Vault',
-          );
-
-          for await (const event of this.vault.runAsync(ctx)) {
-            parallelEvents.push(event);
-          }
-        })(),
-      );
-    }
-
-    // Public Health runs as an enterprise background intelligence
-    // component for every crisis cycle.
-    parallelTasks.push(
-      (async () => {
-        console.log(
-          '[ADK Runtime]: Parallel → PublicHealth'
-        );
-
-        for await (const event of this.publicHealth.runAsync(ctx)) {
-          parallelEvents.push(event);
-        }
-      })(),
-    );
+        });
 
     await Promise.all(parallelTasks);
 
-    // The tactical agents run concurrently, but their structured
-    // ADK events must still be forwarded to the root runner.
-    // Without this, route.ts cannot capture Navigator_result
-    // from the ADK event stream even though Navigator successfully
-    // found a real hospital/shelter/bunker.
+    // Forward all successfully completed specialist events
+    // to the root runner and API event collector.
+
     for (const event of parallelEvents) {
       yield event;
     }
 
-    // ----------------------------------------------------------
-    // 5. VERIFIER
-    // ----------------------------------------------------------
+    // --------------------------------------------------------
+    // STAGE 5 — VERIFIER
+    // --------------------------------------------------------
 
     state.radarIntel =
-      state['Radar_result'] ?? state.radarIntel;
-
-    console.log('[ADK Runtime]: Stage 5 → Verifier');
-
-    for await (const event of this.verifier.runAsync(ctx)) {
-      yield event;
-    }
+      state.Radar_result ?? state.radarIntel;
 
     console.log(
-      '[ADK Runtime]: ChayRa Enterprise Crisis Fleet completed.'
+      '[ADK Runtime]: Stage 5 → Verifier.',
     );
 
-    // Final state is now available to the API layer through
-    // the ADK session.
+    try {
+      for await (
+        const event of this.verifier.runAsync(ctx)
+      ) {
+        yield event;
+      }
+    } catch (error) {
+      console.error(
+        '[ADK Runtime]: Verifier execution failed.',
+        error,
+      );
+    }
+
+    // --------------------------------------------------------
+    // FINAL EXECUTION SUMMARY
+    // --------------------------------------------------------
+
+    console.log(
+      '[ADK Runtime]: ChayRa Enterprise Crisis Fleet completed.',
+      {
+        coordinatesAvailable: hasUserCoordinates,
+
+        agentsScheduled: state.requiredAgents,
+
+        agentsCompleted: {
+          mindGuard: Boolean(state.MindGuard_result),
+          scavenger: Boolean(state.Scavenger_result),
+          radar: state.Radar_result !== undefined,
+          medical: state.Medical_result !== undefined,
+          navigator: state.Navigator_result !== undefined,
+          vault: state.Vault_result !== undefined,
+          publicHealth:
+            state.PublicHealth_result !== undefined,
+          verifier: state.Verifier_result !== undefined,
+        },
+      },
+    );
   }
 
   async *runLiveImpl(
     _ctx: InvocationContext,
   ): AsyncGenerator<Event, void, undefined> {
     throw new Error(
-      `[ADK Runtime] Live streaming is not enabled for ${this.name} yet.`
+      `[ADK Runtime] Live streaming is not enabled for ${this.name}.`,
     );
   }
 }
 
-/**
- * Singleton root agent.
- *
- * The object itself is ADK-native and can later be passed
- * directly to the ADK InMemoryRunner inside the Vercel Node.js API route.
- */
+// ============================================================
+// ROOT AGENT
+// ============================================================
+
 export const chayRaCrisisFleet =
   new ChayRaCrisisFleet();
