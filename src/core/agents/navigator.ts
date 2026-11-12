@@ -1,6 +1,9 @@
 import { EnterpriseAgentRegistry } from '../adk/registry';
 import { generateText } from '../brain/brain';
 
+// ============================================================
+// TYPES
+// ============================================================
 
 type LatLng = {
   lat: number;
@@ -9,10 +12,7 @@ type LatLng = {
 
 type FacilityKind = 'hospital' | 'bunker';
 
-type LookupStatus =
-  | 'VERIFIED'
-  | 'NO_DATA'
-  | 'UNAVAILABLE';
+type LookupStatus = 'VERIFIED' | 'NO_DATA' | 'UNAVAILABLE';
 
 type FacilityResult = {
   lat: number;
@@ -21,108 +21,201 @@ type FacilityResult = {
   kind: FacilityKind;
   distanceKm: number;
   source: 'OpenStreetMap / Overpass';
+  osmType?: string;
+  osmId?: number;
 };
 
 type FacilityLookupResult = {
-  facility: FacilityResult | null;
+  hospital: FacilityResult | null;
+  bunker: FacilityResult | null;
   status: LookupStatus;
   source?: string;
   error?: string;
 };
 
 type OverpassElement = {
+  type?: string;
+  id?: number;
   lat?: number;
   lon?: number;
   center?: {
     lat?: number;
     lon?: number;
   };
-  tags?: {
-    name?: string;
-    amenity?: string;
-    military?: string;
-  };
+  tags?: Record<string, string | undefined>;
 };
 
-const OVERPASS_ENDPOINTS = [
+type OverpassResponse = {
+  elements?: OverpassElement[];
+};
+
+type OverpassEndpoint = {
+  name: string;
+  url: string;
+};
+
+// ============================================================
+// CONFIGURATION
+// ============================================================
+
+/**
+ * Configure one or more full Overpass interpreter URLs in .env.local:
+ *
+ * CHAYRA_OVERPASS_ENDPOINTS=https://your-provider.example/<key>/api/interpreter,https://overpass-api.de/api/interpreter
+ *
+ * A keyed provider should be placed first. Do not put API keys in source control.
+ * The built-in public endpoints are best-effort and have no availability SLA.
+ */
+const DEFAULT_OVERPASS_ENDPOINTS: OverpassEndpoint[] = [
   {
     name: 'Overpass Main',
     url: 'https://overpass-api.de/api/interpreter',
   },
   {
-    name: 'Overpass Private Coffee',
-    url: 'https://overpass.private.coffee/api/interpreter',
-  },
-  {
     name: 'Overpass Maps Mail',
     url: 'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   },
-] as const;
+];
 
-const MAX_ATTEMPTS_PER_ENDPOINT = 2;
-const RETRY_DELAY_MS = 700;
-const REQUEST_TIMEOUT_MS = 20_000;
+const SEARCH_RADIUS_METERS = 25_000;
+const OVERPASS_QUERY_TIMEOUT_SECONDS = 12;
+const DEFAULT_REQUEST_TIMEOUT_MS = 14_000;
+const MIN_REQUEST_TIMEOUT_MS = 5_000;
+const MAX_REQUEST_TIMEOUT_MS = 20_000;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
+function getRequestTimeoutMs(): number {
+  const configured = Number(
+    process.env.CHAYRA_OVERPASS_TIMEOUT_MS,
+  );
 
-function haversineKm(
-  a: LatLng,
-  b: LatLng,
-): number {
-  const R = 6371;
-  const dLat =
-    ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng =
-    ((b.lng - a.lng) * Math.PI) / 180;
-  const lat1 =
-    (a.lat * Math.PI) / 180;
-  const lat2 =
-    (b.lat * Math.PI) / 180;
+  if (!Number.isFinite(configured) || configured <= 0) {
+    return DEFAULT_REQUEST_TIMEOUT_MS;
+  }
 
-  const sinLat =
-    Math.sin(dLat / 2);
-  const sinLng =
-    Math.sin(dLng / 2);
-
-  const h =
-    sinLat * sinLat +
-    Math.cos(lat1) *
-      Math.cos(lat2) *
-      sinLng *
-      sinLng;
-
-  return (
-    2 *
-    R *
-    Math.asin(
-      Math.min(
-        1,
-        Math.sqrt(h),
-      ),
-    )
+  return Math.min(
+    MAX_REQUEST_TIMEOUT_MS,
+    Math.max(MIN_REQUEST_TIMEOUT_MS, Math.floor(configured)),
   );
 }
 
-function getElementCoords(
-  element: OverpassElement,
-): LatLng | null {
-  const lat =
-    element.lat ??
-    element.center?.lat;
+function getOverpassEndpoints(): OverpassEndpoint[] {
+  const configured = (
+    process.env.CHAYRA_OVERPASS_ENDPOINTS ?? ''
+  )
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
 
-  const lng =
-    element.lon ??
-    element.center?.lon;
+  const candidates = [
+    ...configured.map((url) => ({
+      name: getEndpointName(url),
+      url,
+    })),
+    ...DEFAULT_OVERPASS_ENDPOINTS,
+  ];
+
+  const seen = new Set<string>();
+  const endpoints: OverpassEndpoint[] = [];
+
+  for (const endpoint of candidates) {
+    try {
+      const parsed = new URL(endpoint.url);
+
+      // Only HTTPS endpoints are accepted. This prevents accidental
+      // transmission of location coordinates to an insecure HTTP host.
+      if (parsed.protocol !== 'https:') {
+        console.warn(
+          `[Navigator]: Ignoring non-HTTPS Overpass endpoint: ${endpoint.url}`,
+        );
+        continue;
+      }
+
+      const normalizedUrl = parsed.toString();
+
+      if (seen.has(normalizedUrl)) {
+        continue;
+      }
+
+      seen.add(normalizedUrl);
+      endpoints.push({
+        name: endpoint.name,
+        url: normalizedUrl,
+      });
+    } catch {
+      console.warn(
+        `[Navigator]: Ignoring invalid Overpass endpoint: ${endpoint.url}`,
+      );
+    }
+  }
+
+  return endpoints;
+}
+
+function getEndpointName(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return 'Configured Overpass endpoint';
+  }
+}
+
+// ============================================================
+// GEO HELPERS
+// ============================================================
+
+function haversineKm(a: LatLng, b: LatLng): number {
+  const earthRadiusKm = 6371;
+  const deltaLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const deltaLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+
+  const sinLat = Math.sin(deltaLat / 2);
+  const sinLng = Math.sin(deltaLng / 2);
+
+  const haversine =
+    sinLat * sinLat +
+    Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+
+  return (
+    2 *
+    earthRadiusKm *
+    Math.asin(Math.min(1, Math.sqrt(haversine)))
+  );
+}
+
+function isValidCoordinates(value: unknown): value is LatLng {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const coords = value as Record<string, unknown>;
+
+  return (
+    typeof coords.lat === 'number' &&
+    typeof coords.lng === 'number' &&
+    Number.isFinite(coords.lat) &&
+    Number.isFinite(coords.lng) &&
+    coords.lat >= -90 &&
+    coords.lat <= 90 &&
+    coords.lng >= -180 &&
+    coords.lng <= 180
+  );
+}
+
+function getElementCoords(element: OverpassElement): LatLng | null {
+  const lat = element.lat ?? element.center?.lat;
+  const lng = element.lon ?? element.center?.lon;
 
   if (
     typeof lat !== 'number' ||
     typeof lng !== 'number' ||
     !Number.isFinite(lat) ||
-    !Number.isFinite(lng)
+    !Number.isFinite(lng) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180
   ) {
     return null;
   }
@@ -130,41 +223,87 @@ function getElementCoords(
   return { lat, lng };
 }
 
-function isTransientOverpassStatus(
-  status: number,
-): boolean {
-  return (
-    status === 408 ||
-    status === 429 ||
-    status === 500 ||
-    status === 502 ||
-    status === 503 ||
-    status === 504
-  );
+function classifyFacility(
+  tags: Record<string, string | undefined> | undefined,
+): FacilityKind | null {
+  if (!tags) {
+    return null;
+  }
+
+  const amenity = tags.amenity?.toLowerCase();
+  const healthcare = tags.healthcare?.toLowerCase();
+  const military = tags.military?.toLowerCase();
+  const building = tags.building?.toLowerCase();
+  const socialFacility = tags.social_facility?.toLowerCase();
+
+  if (
+    amenity === 'hospital' ||
+    amenity === 'clinic' ||
+    healthcare === 'hospital' ||
+    healthcare === 'clinic'
+  ) {
+    return 'hospital';
+  }
+
+  if (
+    amenity === 'shelter' ||
+    socialFacility === 'shelter' ||
+    military === 'bunker' ||
+    building === 'bunker'
+  ) {
+    return 'bunker';
+  }
+
+  return null;
 }
 
-function buildFacilityQuery(
-  userCoords: LatLng,
-  type: FacilityKind,
+function getFacilityName(
+  element: OverpassElement,
+  kind: FacilityKind,
 ): string {
-  return (
-    type === 'hospital'
-      ? `[out:json][timeout:20];(
-           nwr["amenity"="hospital"](around:25000,${userCoords.lat},${userCoords.lng});
-           nwr["amenity"="clinic"](around:25000,${userCoords.lat},${userCoords.lng});
-         );out center tags;`
-      : `[out:json][timeout:20];(
-           nwr["military"="bunker"](around:25000,${userCoords.lat},${userCoords.lng});
-           nwr["amenity"="shelter"](around:25000,${userCoords.lat},${userCoords.lng});
-         );out center tags;`
-  );
+  const name = element.tags?.name?.trim();
+
+  if (name) {
+    return name;
+  }
+
+  return kind === 'hospital'
+    ? 'OSM-mapped Hospital / Clinic'
+    : 'OSM-mapped Shelter / Bunker';
 }
+
+// ============================================================
+// OVERPASS QUERY
+// ============================================================
+
+/**
+ * One combined query retrieves both facility groups. The earlier version
+ * sent separate hospital and bunker queries to every server and retried
+ * each request twice, multiplying latency and load during an outage.
+ */
+function buildFacilityQuery(userCoords: LatLng): string {
+  const lat = userCoords.lat.toFixed(6);
+  const lng = userCoords.lng.toFixed(6);
+
+  return `
+[out:json][timeout:${OVERPASS_QUERY_TIMEOUT_SECONDS}];
+(
+  nwr["amenity"~"^(hospital|clinic|shelter)$"](around:${SEARCH_RADIUS_METERS},${lat},${lng});
+  nwr["healthcare"~"^(hospital|clinic)$"](around:${SEARCH_RADIUS_METERS},${lat},${lng});
+  nwr["social_facility"="shelter"](around:${SEARCH_RADIUS_METERS},${lat},${lng});
+  nwr["military"="bunker"](around:${SEARCH_RADIUS_METERS},${lat},${lng});
+  nwr["building"="bunker"](around:${SEARCH_RADIUS_METERS},${lat},${lng});
+);
+out center tags;
+`.trim();
+}
+
+// ============================================================
+// OVERPASS REQUEST
+// ============================================================
 
 async function queryOverpassEndpoint(
-  endpoint: {
-    name: string;
-    url: string;
-  },
+  endpoint: OverpassEndpoint,
   query: string,
 ): Promise<
   | {
@@ -174,275 +313,214 @@ async function queryOverpassEndpoint(
     }
   | {
       ok: false;
-      retryable: boolean;
-      status: number | null;
       endpointName: string;
+      status: number | null;
       error: string;
     }
 > {
-  const url =
-    `${endpoint.url}?data=${encodeURIComponent(query)}`;
+  try {
+    const response = await fetch(endpoint.url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'User-Agent':
+          'ChayRa-AI-Enterprise/3.0 (+https://github.com/ranajitdharpersonal/chayraai)',
+      },
+      body: new URLSearchParams({ data: query }).toString(),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(getRequestTimeoutMs()),
+    });
 
-  for (
-    let attempt = 1;
-    attempt <= MAX_ATTEMPTS_PER_ENDPOINT;
-    attempt += 1
-  ) {
-    try {
-      const response = await fetch(
-        url,
-        {
-          method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            'User-Agent':
-              'ChayRa-AI-Enterprise/3.0 (Hackathon)',
-          },
-          signal:
-            AbortSignal.timeout(
-              REQUEST_TIMEOUT_MS,
-            ),
-        },
-      );
-
-      if (response.ok) {
-        const data =
-          await response.json();
-
-        const elements: OverpassElement[] =
-          Array.isArray(
-            data?.elements,
-          )
-            ? data.elements
-            : [];
-
-        return {
-          ok: true,
-          elements,
-          endpointName:
-            endpoint.name,
-        };
-      }
-
-      const retryable =
-        isTransientOverpassStatus(
-          response.status,
-        );
+    if (!response.ok) {
+      const statusText = response.statusText || 'Request failed';
+      const error = `Overpass HTTP ${response.status} ${statusText}`;
 
       console.warn(
-        `[Navigator]: ${endpoint.name} returned HTTP ${response.status} on attempt ${attempt}/${MAX_ATTEMPTS_PER_ENDPOINT}.`,
+        `[Navigator]: ${endpoint.name} returned ${error}.`,
       );
-
-      if (
-        retryable &&
-        attempt < MAX_ATTEMPTS_PER_ENDPOINT
-      ) {
-        await sleep(
-          RETRY_DELAY_MS,
-        );
-        continue;
-      }
 
       return {
         ok: false,
-        retryable,
+        endpointName: endpoint.name,
         status: response.status,
-        endpointName:
-          endpoint.name,
-        error:
-          `Overpass returned HTTP ${response.status}.`,
-      };
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Unknown Overpass request error';
-
-      console.warn(
-        `[Navigator]: ${endpoint.name} request failed on attempt ${attempt}/${MAX_ATTEMPTS_PER_ENDPOINT}: ${message}`,
-      );
-
-      if (
-        attempt <
-        MAX_ATTEMPTS_PER_ENDPOINT
-      ) {
-        await sleep(
-          RETRY_DELAY_MS,
-        );
-        continue;
-      }
-
-      return {
-        ok: false,
-        retryable: true,
-        status: null,
-        endpointName:
-          endpoint.name,
-        error: message,
+        error,
       };
     }
-  }
 
-  return {
-    ok: false,
-    retryable: true,
-    status: null,
-    endpointName:
-      endpoint.name,
-    error:
-      'Overpass lookup exhausted its retry budget.',
-  };
-}
+    let data: OverpassResponse;
 
-async function fetchNearestFacility(
-  userCoords: LatLng,
-  type: FacilityKind,
-): Promise<FacilityLookupResult> {
-  const query =
-    buildFacilityQuery(
-      userCoords,
-      type,
+    try {
+      data = (await response.json()) as OverpassResponse;
+    } catch {
+      return {
+        ok: false,
+        endpointName: endpoint.name,
+        status: response.status,
+        error: 'Overpass returned an invalid JSON response.',
+      };
+    }
+
+    return {
+      ok: true,
+      elements: Array.isArray(data?.elements) ? data.elements : [],
+      endpointName: endpoint.name,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown network error';
+
+    console.warn(
+      `[Navigator]: ${endpoint.name} request failed: ${message}`,
     );
 
-  console.log(
-    `[Navigator]: Searching ${type} facilities within 25km...`,
-  );
+    return {
+      ok: false,
+      endpointName: endpoint.name,
+      status: null,
+      error: message,
+    };
+  }
+}
 
-  let sawSuccessfulEndpoint =
-    false;
+// ============================================================
+// FACILITY RESOLUTION
+// ============================================================
 
-  let lastError =
-    'All Overpass endpoints failed.';
+function resolveNearestFacilities(
+  elements: OverpassElement[],
+  userCoords: LatLng,
+): {
+  hospital: FacilityResult | null;
+  bunker: FacilityResult | null;
+} {
+  const candidates: FacilityResult[] = [];
+  const seen = new Set<string>();
 
-  for (
-    const endpoint of OVERPASS_ENDPOINTS
-  ) {
-    const result =
-      await queryOverpassEndpoint(
-        endpoint,
-        query,
-      );
+  for (const element of elements) {
+    const kind = classifyFacility(element.tags);
 
-    if (!result.ok) {
-      lastError =
-        result.error;
-
-      console.warn(
-        `[Navigator]: ${type} lookup unavailable via ${result.endpointName}. Trying next endpoint.`,
-      );
-
+    if (!kind) {
       continue;
     }
 
-    sawSuccessfulEndpoint = true;
+    const coords = getElementCoords(element);
 
-    const candidates =
-      result.elements
-        .map((element) => {
-          const coords =
-            getElementCoords(
-              element,
-            );
-
-          if (!coords) {
-            return null;
-          }
-
-          const distanceKm =
-            haversineKm(
-              userCoords,
-              coords,
-            );
-
-          if (
-            distanceKm > 25
-          ) {
-            return null;
-          }
-
-          return {
-            lat: coords.lat,
-            lng: coords.lng,
-            name:
-              element.tags?.name?.trim() ||
-              (type === 'hospital'
-                ? 'Nearest Hospital / Clinic'
-                : 'Nearest Shelter / Bunker'),
-            kind: type,
-            distanceKm,
-            source:
-              'OpenStreetMap / Overpass' as const,
-          };
-        })
-        .filter(
-          (
-            value,
-          ): value is FacilityResult =>
-            value !== null,
-        )
-        .sort(
-          (a, b) =>
-            a.distanceKm -
-            b.distanceKm,
-        );
-
-    const nearest =
-      candidates[0] ?? null;
-
-    if (nearest) {
-      console.log(
-        `[Navigator]: ${type} → ${nearest.name} (${nearest.distanceKm.toFixed(
-          2,
-        )} km) via ${result.endpointName}`,
-      );
-
-      return {
-        facility: nearest,
-        status: 'VERIFIED',
-        source:
-          result.endpointName,
-      };
+    if (!coords) {
+      continue;
     }
 
-    // IMPORTANT:
-    // A successful Overpass response with zero candidates
-    // means "no verified facility found", not "lookup failed".
-    console.log(
-      `[Navigator]: No verified ${type} facility found within 25km via ${result.endpointName}.`,
-    );
+    const distanceKm = haversineKm(userCoords, coords);
 
-    return {
-      facility: null,
-      status: 'NO_DATA',
-      source:
-        result.endpointName,
-    };
+    if (distanceKm > SEARCH_RADIUS_METERS / 1000) {
+      continue;
+    }
+
+    const identity =
+      element.type && typeof element.id === 'number'
+        ? `${element.type}/${element.id}`
+        : `${kind}/${coords.lat.toFixed(6)}/${coords.lng.toFixed(6)}`;
+
+    if (seen.has(identity)) {
+      continue;
+    }
+
+    seen.add(identity);
+
+    candidates.push({
+      lat: coords.lat,
+      lng: coords.lng,
+      name: getFacilityName(element, kind),
+      kind,
+      distanceKm,
+      source: 'OpenStreetMap / Overpass',
+      osmType: element.type,
+      osmId: element.id,
+    });
   }
 
-  if (!sawSuccessfulEndpoint) {
-    console.error(
-      `[Navigator]: ${type} lookup unavailable across all Overpass endpoints.`,
-    );
-
-    return {
-      facility: null,
-      status: 'UNAVAILABLE',
-      error: lastError,
-    };
-  }
+  candidates.sort((a, b) => a.distanceKm - b.distanceKm);
 
   return {
-    facility: null,
-    status: 'NO_DATA',
+    hospital: candidates.find((candidate) => candidate.kind === 'hospital') ?? null,
+    bunker: candidates.find((candidate) => candidate.kind === 'bunker') ?? null,
   };
 }
 
-function safePrimaryNeed(
-  value: unknown,
-): FacilityKind {
-  return value === 'bunker'
-    ? 'bunker'
-    : 'hospital';
+async function fetchNearestFacilities(
+  userCoords: LatLng,
+): Promise<FacilityLookupResult> {
+  const endpoints = getOverpassEndpoints();
+  const query = buildFacilityQuery(userCoords);
+
+  console.log(
+    `[Navigator]: Searching mapped hospitals, clinics, shelters and bunkers within ${SEARCH_RADIUS_METERS / 1000}km using one combined query...`,
+  );
+
+  if (!endpoints.length) {
+    return {
+      hospital: null,
+      bunker: null,
+      status: 'UNAVAILABLE',
+      error: 'No valid HTTPS Overpass endpoint is configured.',
+    };
+  }
+
+  let lastError = 'All configured Overpass endpoints failed.';
+
+  // Try each endpoint once. Avoid repeated retries against an overloaded
+  // public service; move to the next configured endpoint instead.
+  for (const endpoint of endpoints) {
+    console.log(
+      `[Navigator]: Querying ${endpoint.name}...`,
+    );
+
+    const result = await queryOverpassEndpoint(endpoint, query);
+
+    if (!result.ok) {
+      lastError = result.error;
+      continue;
+    }
+
+    const facilities = resolveNearestFacilities(
+      result.elements,
+      userCoords,
+    );
+
+    console.log(
+      `[Navigator]: ${result.endpointName} responded. ` +
+        `Mapped hospitals/clinics=${facilities.hospital ? 1 : 0}, ` +
+        `mapped shelters/bunkers=${facilities.bunker ? 1 : 0}.`,
+    );
+
+    return {
+      ...facilities,
+      status:
+        facilities.hospital || facilities.bunker
+          ? 'VERIFIED'
+          : 'NO_DATA',
+      source: result.endpointName,
+    };
+  }
+
+  console.error(
+    '[Navigator]: All configured Overpass endpoints failed.',
+  );
+
+  return {
+    hospital: null,
+    bunker: null,
+    status: 'UNAVAILABLE',
+    error: lastError,
+  };
+}
+
+// ============================================================
+// PRIMARY DESTINATION DECISION
+// ============================================================
+
+function safePrimaryNeed(value: unknown): FacilityKind {
+  return value === 'bunker' ? 'bunker' : 'hospital';
 }
 
 async function getPrimaryDecision(
@@ -453,11 +531,11 @@ async function getPrimaryDecision(
 }> {
   try {
     const prompt = `
-You are the Navigator Agent in a crisis rescue system.
+You are the Navigator agent for a civilian emergency-response application.
 
-Choose the preferred destination type:
-- hospital = medical injury, fire injury, collapse, accident, trauma, poisoning, sick person
-- bunker = active violence, explosion, armed threat, bombardment, structural danger, unsafe area
+Choose which mapped facility type should be presented as the primary option:
+- hospital: injury, illness, fire injury, collapse, accident, trauma or poisoning
+- bunker: immediate physical danger where a mapped shelter/bunker may be relevant
 
 Emergency:
 "${emergencyInput}"
@@ -465,214 +543,146 @@ Emergency:
 Return ONLY valid JSON:
 {
   "primaryNeed": "hospital" | "bunker",
-  "instruction": "one concise rescue instruction"
+  "instruction": "one concise safety instruction"
 }
 `;
 
-    const text = await generateText(prompt) || '{}';
+    const text = (await generateText(prompt)) || '{}';
+    const cleanJson = text
+      .replace(/```json/gi, '')
+      .replace(/```/g, '')
+      .trim();
 
-    const cleanJson =
-      text
-        .replace(
-          /```json/g,
-          '',
-        )
-        .replace(
-          /```/g,
-          '',
-        )
-        .trim();
-
-    const parsed =
-      JSON.parse(cleanJson);
+    const parsed = JSON.parse(cleanJson);
 
     return {
-      primaryNeed:
-        safePrimaryNeed(
-          parsed?.primaryNeed,
-        ),
+      primaryNeed: safePrimaryNeed(parsed?.primaryNeed),
       instruction:
-        typeof parsed?.instruction ===
-          'string' &&
-        parsed.instruction.trim()
+        typeof parsed?.instruction === 'string' && parsed.instruction.trim()
           ? parsed.instruction.trim()
-          : 'Move toward the nearest verified safe facility.',
+          : 'Follow local emergency-service instructions and use only a facility you can confirm is accessible.',
     };
   } catch (error) {
     console.warn(
-      '[Navigator]: AI destination decision unavailable; continuing with verified facility search.',
+      '[Navigator]: AI destination preference unavailable; using hospital as the default primary category.',
       error,
     );
 
     return {
-      primaryNeed:
-        'hospital',
+      primaryNeed: 'hospital',
       instruction:
-        'Move toward the nearest verified safe facility.',
+        'Follow local emergency-service instructions and use only a facility you can confirm is accessible.',
     };
   }
 }
 
-async function runNavigator(
-  data: {
-    input: string;
-    userCoords?: LatLng;
-  },
-) {
+// ============================================================
+// NAVIGATOR AGENT
+// ============================================================
+
+async function runNavigator(data: {
+  input: string;
+  userCoords?: LatLng;
+}) {
   console.log(
-    '[Navigator]: Executing DUAL-SCAN for real-world safe zones...',
+    '[Navigator]: Starting combined real-world facility lookup...',
   );
 
-  if (!data.userCoords) {
-    return {
-      text:
-        'SYSTEM WARNING: User coordinates are missing. Enable GPS or drop a tactical pin so ChayRa can search verified facilities within 25km.',
-      destCoords: null,
-      isRealData: false,
-      lookupStatus:
-        'UNAVAILABLE' as const,
-      facility: null,
-      hospital: null,
-      bunker: null,
-    };
-  }
-
-  try {
-    const decision =
-      await getPrimaryDecision(
-        data.input,
-      );
-
-    // Preserve the existing parallel dual-scan behavior.
-    const [
-      hospitalLookup,
-      bunkerLookup,
-    ] = await Promise.all([
-      fetchNearestFacility(
-        data.userCoords,
-        'hospital',
-      ),
-      fetchNearestFacility(
-        data.userCoords,
-        'bunker',
-      ),
-    ]);
-
-    const hospital =
-      hospitalLookup.facility;
-
-    const bunker =
-      bunkerLookup.facility;
-
-    const primary =
-      decision.primaryNeed === 'bunker'
-        ? bunker ?? hospital
-        : hospital ?? bunker;
-
-    const anyUnavailable =
-      hospitalLookup.status ===
-        'UNAVAILABLE' ||
-      bunkerLookup.status ===
-        'UNAVAILABLE';
-
-    if (
-      hospital &&
-      bunker &&
-      primary
-    ) {
-      const alternative =
-        primary.kind === 'hospital'
-          ? bunker
-          : hospital;
-
-      return {
-        text:
-          `Verified nearest ${primary.kind}: ${primary.name} (${primary.distanceKm.toFixed(
-            1,
-          )} km). ` +
-          `Alternative ${alternative.kind}: ${alternative.name} (${alternative.distanceKm.toFixed(
-            1,
-          )} km). ${decision.instruction}`,
-        destCoords: {
-          lat: primary.lat,
-          lng: primary.lng,
-        },
-        isRealData: true,
-        lookupStatus:
-          'VERIFIED' as const,
-        facility: primary,
-        hospital,
-        bunker,
-      };
-    }
-
-    if (primary) {
-      return {
-        text:
-          `Verified ${primary.kind} found within 25km: ${primary.name} (${primary.distanceKm.toFixed(
-            1,
-          )} km). ${decision.instruction}`,
-        destCoords: {
-          lat: primary.lat,
-          lng: primary.lng,
-        },
-        isRealData: true,
-        lookupStatus:
-          'VERIFIED' as const,
-        facility: primary,
-        hospital,
-        bunker,
-      };
-    }
-
-    // IMPORTANT:
-    // Do not claim "no facility exists" when an upstream
-    // Overpass service failed.
-    if (anyUnavailable) {
-      return {
-        text:
-          'LIVE FACILITY LOOKUP TEMPORARILY UNAVAILABLE: ChayRa could not verify hospitals, clinics, shelters or bunkers from the external OpenStreetMap service right now. Please retry shortly; do not treat this as proof that no facility exists.',
-        destCoords: null,
-        isRealData: false,
-        lookupStatus:
-          'UNAVAILABLE' as const,
-        facility: null,
-        hospital,
-        bunker,
-      };
-    }
-
-    // Only reach this branch when the external lookup
-    // successfully responded but returned no matching facility.
-    return {
-      text:
-        'No verified hospital, clinic, shelter or bunker was found within 25km of your pinned location. Do not move blindly; seek the safest available hard cover and conserve battery.',
-      destCoords: null,
-      isRealData: false,
-      lookupStatus:
-        'NO_DATA' as const,
-      facility: null,
-      hospital,
-      bunker,
-    };
-  } catch (error) {
-    console.error(
-      '[Navigator]: Routing failed.',
-      error,
+  if (!isValidCoordinates(data.userCoords)) {
+    console.warn(
+      '[Navigator]: Valid user coordinates were not supplied to the agent.',
     );
 
     return {
       text:
-        'SYSTEM WARNING: Safe-zone lookup is temporarily unavailable. Do not rely on an unverified location; seek immediate hard cover and await rescue guidance.',
+        'Location coordinates are missing or invalid. Enable GPS or drop a map pin so ChayRa can search mapped facilities within 25km.',
       destCoords: null,
       isRealData: false,
-      lookupStatus:
-        'UNAVAILABLE' as const,
+      lookupStatus: 'UNAVAILABLE' as const,
       facility: null,
       hospital: null,
       bunker: null,
+      userCoords: null,
     };
   }
+
+  // Start the Bedrock preference decision and OSM lookup together.
+  // The previous implementation waited for Bedrock before starting its
+  // long series of external Overpass requests.
+  const [decision, lookup] = await Promise.all([
+    getPrimaryDecision(data.input),
+    fetchNearestFacilities(data.userCoords),
+  ]);
+
+  const hospital = lookup.hospital;
+  const bunker = lookup.bunker;
+
+  const primary =
+    decision.primaryNeed === 'bunker'
+      ? bunker ?? hospital
+      : hospital ?? bunker;
+
+  if (!hospital && !bunker) {
+    if (lookup.status === 'UNAVAILABLE') {
+      return {
+        text:
+          'LIVE FACILITY LOOKUP UNAVAILABLE: ChayRa could not reach the configured OpenStreetMap facility-search service. No nearby facility could be verified in this request. Please retry or contact local emergency services; do not interpret this as proof that no hospital or shelter exists.',
+        destCoords: null,
+        isRealData: false,
+        lookupStatus: 'UNAVAILABLE' as const,
+        facility: null,
+        hospital: null,
+        bunker: null,
+        userCoords: data.userCoords,
+        lookupError: lookup.error ?? null,
+      };
+    }
+
+    return {
+      text:
+        'NO MAPPED FACILITY FOUND: The OpenStreetMap query returned no tagged hospital, clinic, shelter or bunker within 25km. This does not prove that no facility exists. Contact local emergency services for current directions.',
+      destCoords: null,
+      isRealData: false,
+      lookupStatus: 'NO_DATA' as const,
+      facility: null,
+      hospital: null,
+      bunker: null,
+      userCoords: data.userCoords,
+    };
+  }
+
+  const alternative =
+    primary?.kind === 'hospital' ? bunker : hospital;
+
+  const primaryDescription = primary
+    ? `Nearest mapped ${primary.kind}: ${primary.name} (${primary.distanceKm.toFixed(1)} km).`
+    : 'No mapped facility was found for the preferred category.';
+
+  const alternativeDescription = alternative
+    ? ` Alternative mapped ${alternative.kind}: ${alternative.name} (${alternative.distanceKm.toFixed(1)} km).`
+    : '';
+
+  const disclaimer =
+    ' OpenStreetMap data confirms only that the location is mapped; it does not confirm that the facility is open, accessible, staffed or safe right now. Follow official local emergency instructions.';
+
+  return {
+    text:
+      `${primaryDescription}${alternativeDescription} ${decision.instruction}${disclaimer}`,
+    destCoords: primary
+      ? {
+          lat: primary.lat,
+          lng: primary.lng,
+        }
+      : null,
+    isRealData: Boolean(primary),
+    lookupStatus: 'VERIFIED' as const,
+    facility: primary,
+    hospital,
+    bunker,
+    userCoords: data.userCoords,
+    lookupSource: lookup.source ?? null,
+    verificationLevel: 'OSM_MAPPED_NOT_LIVE_VERIFIED' as const,
+  };
 }
 
 EnterpriseAgentRegistry.registerAgent(
