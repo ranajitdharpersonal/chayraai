@@ -11,7 +11,7 @@ import {
 
 const CONFIG = {
   region:
-    process.env.AWS_REGION || 'ap-south-1',
+    process.env.AWS_REGION || 'us-east-1',
 
   modelId:
     process.env.AWS_BEDROCK_MODEL_ID?.trim() ||
