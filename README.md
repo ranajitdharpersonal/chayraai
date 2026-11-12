@@ -1,32 +1,26 @@
 # ChayRa AI
 
-### Autonomous Crisis Response Enterprise Fleet
+### Autonomous Multi-Agent Crisis Response Platform
 
 > **When the World Breaks, ChayRa Responds.**
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js)](https://nextjs.org/)
-[![Google ADK](https://img.shields.io/badge/Google-ADK-4285F4?logo=google)](https://google.github.io/adk-docs/)
-[![Gemini](https://img.shields.io/badge/Gemini-3.5%20Flash-8E75FF?logo=google)](https://cloud.google.com/vertex-ai)
-[![Cloud Run](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run-4285F4?logo=googlecloud)](https://cloud.google.com/run)
-[![Firestore](https://img.shields.io/badge/Google%20Cloud-Firestore-FFCA28?logo=firebase)](https://firebase.google.com/docs/firestore)
-[![Model Armor](https://img.shields.io/badge/Google%20Cloud-Model%20Armor-34A853?logo=googlecloud)](https://cloud.google.com/security/products/model-armor)
-[![▶ WATCH DEMO](https://img.shields.io/badge/▶_WATCH_DEMO-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/X2GPxNOW8BQ)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Amazon Bedrock](https://img.shields.io/badge/Amazon-Bedrock-FF9900?logo=amazonaws&logoColor=white)](https://aws.amazon.com/bedrock/)
+[![Amazon DynamoDB](https://img.shields.io/badge/Amazon-DynamoDB-4053D6?logo=amazondynamodb&logoColor=white)](https://aws.amazon.com/dynamodb/)
+[![AWS SDK](https://img.shields.io/badge/AWS-SDK_for_JavaScript_v3-232F3E?logo=amazonaws&logoColor=white)](https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/welcome.html)
 
-ChayRa AI is an autonomous, multi-agent crisis-response system designed to move beyond conversational AI.
+ChayRa AI is an autonomous, multi-agent crisis-response application designed to help turn an emergency request into a coordinated operational response. It combines specialist agents, external intelligence sources, facility discovery, routing, evidence-oriented verification, and persistent operational memory in a single web interface.
 
-Instead of waiting for a user to request one answer at a time, ChayRa activates a coordinated enterprise-style agent fleet that can interpret a crisis, gather live intelligence, find actionable destinations, analyze public-health signals, cross-check evidence, persist operational state, and return verified actions through a live tactical interface.
+Rather than treating a crisis as a one-question chatbot interaction, ChayRa coordinates a sequence of specialist tasks and returns structured results for the user to review.
 
 ---
 
-## Live Production Demo
+## Live Application
 
-**Hosted Application:**  
-https://chayra-ai-service-936258611923.us-central1.run.app
-
-
-### Demo Video
-
-[![ChayRa AI Demo](https://img.youtube.com/vi/X2GPxNOW8BQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=X2GPxNOW8BQ)
+**Production URL:**  
+https://chayra.ranajitdhar.in
 
 
 **Source Code:**  
@@ -36,487 +30,256 @@ https://github.com/ranajitdharpersonal/chayraai
 
 ## Why ChayRa?
 
-Most AI systems answer questions.
+A real-world emergency can require several decisions at once:
 
-**ChayRa coordinates a response.**
+- What is happening, and how severe is it?
+- Which response specialists should be involved?
+- What relevant threat intelligence is available?
+- Which mapped medical or shelter facilities may be nearby?
+- What public-health alerts have trusted sources published?
+- Which claims are supported by the available evidence?
+- What useful session information should be retained?
 
-A single crisis request can trigger a governed agent fleet that combines
-live intelligence, real-world navigation, public-health analysis,
-evidence verification and persistent operational memory.
+ChayRa coordinates these activities through a multi-agent workflow and presents the results through a tactical web interface.
 
-> **One request. Multiple specialist agents. One verified operational response.**
-
----
-
-## Why This Fits the Fortified Enterprise Fleet Track
-
-ChayRa was intentionally engineered around the four capabilities emphasized by this track:
-
-**Discovery & Lifecycle** — A custom enterprise agent control layer manages agent metadata, versions, capabilities, status, heartbeat, clearance, discovery and routing.
-
-**Core Execution & State** — Google ADK coordinates the fleet, while Firestore provides persistent operational memory and a private autonomous runtime supports background execution beyond a single request.
-
-**Security & Governance** — MindGuard places Google Cloud Model Armor in the request path before downstream crisis processing, with Google Cloud service identity and clearance-aware agent execution.
-
-**Telemetry** — Trace IDs, ADK events, fleet heartbeat and Cloud Logging provide visibility into what the fleet actually did.
-
-The implementation uses a custom enterprise registry/control layer on top of Google ADK and Google Cloud services, rather than claiming direct use of every managed Gemini Enterprise Agent Platform component.
-
-This gives ChayRa fine-grained control over crisis-specific orchestration, specialist routing, external intelligence, persistence and failure handling while remaining Google Cloud-native.
+**One request. Multiple specialist agents. A coordinated response.**
 
 ---
 
-## The Core Idea
+## Core Capabilities
 
-```text
-A crisis request
-      ↓
-MindGuard
-      ↓
-Scavenger
-      ↓
-Radar
-      ↓
-┌────────────┬─────────────┬────────────────┐
-│  Medical   │  Navigator  │  Public Health │
-└────────────┴─────────────┴────────────────┘
-      ↓
-Verifier
-      ↓
-Memory + Security + Live Intelligence
-      ↓
-Verified Action
-```
+### Emergency request orchestration
 
-ChayRa is not designed as a single chatbot. It is a coordinated crisis-response fleet in which specialized agents work together to turn ambiguous requests into operational results.
+Accepts a natural-language crisis request, validates the payload, creates a session, and executes the specialist workflow.
 
----
+### Multi-agent crisis analysis
 
-## The Problem
+Routes work across specialist agents for context extraction, threat intelligence, medical first-aid guidance, facility discovery, public-health intelligence, rescue-beacon guidance, and evidence-oriented verification.
 
-Crisis response is rarely a single-question problem.
+### Live and persisted threat intelligence
 
-A real emergency may require several decisions at once:
+Collects global environmental and seismic event data from NASA EONET and USGS through a scheduled scan. The resulting snapshot is stored in DynamoDB and consumed by foreground crisis requests.
 
-- What is happening?
-- Is the request safe to process?
-- What threats are active nearby?
-- Which medical resources are reachable?
-- Where is the nearest shelter or bunker?
-- Are there verified public-health alerts?
-- Which claims can be trusted?
-- What should the user do next?
+### Facility discovery and navigation
 
-Traditional chat interfaces usually answer one layer at a time and depend heavily on the user to perform the next step.
+Uses OpenStreetMap Overpass data to look for mapped hospitals, clinics, shelters, and bunkers around supplied coordinates. Where possible, it requests road geometry from OSRM and falls back to a clearly identified straight-line estimate when routing is unavailable.
 
-In a crisis, that coordination cost matters.
+### Public-health intelligence
+
+Retrieves relevant records from WHO Disease Outbreak News and UN ReliefWeb, distinguishes official-source records from model-generated analysis, and retains a last-known-good snapshot in DynamoDB.
+
+### Evidence-oriented verification
+
+The Verifier compares a user claim with the available stored radar intelligence. It is designed to avoid marking a claim as verified when the supplied evidence does not support it.
+
+### Persistent operational memory
+
+Stores session state, public-health snapshots, and radar snapshots in Amazon DynamoDB. Session records use an application-level 30-day expiry timestamp, with DynamoDB TTL available for eventual cleanup when configured on the table.
+
+### Resilient response behavior
+
+Uses agent-level fallbacks and previously stored snapshots where implemented, so an upstream model or data-source failure does not automatically erase all useful response context.
 
 ---
 
-## The Solution
-
-ChayRa turns one crisis request into a coordinated multi-agent workflow.
-
-```text
-User
- ↓
-Safety + intent analysis
- ↓
-Crisis context extraction
- ↓
-Live threat intelligence
- ↓
-Parallel specialist execution
- ├── Medical
- ├── Navigator
- └── Public Health
- ↓
-Evidence verification
- ↓
-Persistent operational state
- ↓
-Map + tactical recommendations
-```
-
-The result is a system designed to **act through the workflow**, not simply describe it.
-
----
-
-## What ChayRa Can Do
-
-### 🚨 Emergency Response
-
-Understand an emergency request and activate the appropriate crisis-response workflow.
-
-### 🛡️ Safety & Governance
-
-MindGuard uses Google Cloud Model Armor as an inline safety gate before downstream crisis processing.
-
-### 🛰️ Live Crisis Intelligence
-
-Radar combines external intelligence sources to build a live tactical picture.
-
-### 🏥 Medical Support
-
-Medical analyzes emergency context and returns medical-response guidance.
-
-### 🧭 Real-World Navigation
-
-Navigator searches for nearby hospitals, clinics, shelters and bunkers and can return real destination coordinates for map-based action.
-
-### 🦠 Public Health Intelligence
-
-Public Health combines trusted health intelligence, including WHO Disease Outbreak News and ReliefWeb when configured, with historical snapshot fallback.
-
-### 🔎 Evidence Verification
-
-Verifier cross-checks crisis information and produces an evidence-oriented response panel.
-
-### 🧠 Persistent Operational Memory
-
-Firestore-backed memory preserves crisis state, public-health intelligence, historical events and fleet state.
-
-### 🌐 Tactical Command Interface
-
-A live Next.js command interface unifies telemetry, maps, tactical intelligence, verification and response actions.
-
----
-
-## The Autonomous Agent Fleet
+## Agent Fleet
 
 | Agent | Responsibility |
 |---|---|
-| **MindGuard** | Security gateway, Model Armor sanitization and emergency safety classification |
-| **Scavenger** | Crisis context extraction, entity understanding and source/search planning |
-| **Radar** | Live crisis intelligence, threat scanning and geopolitical/environmental intelligence |
-| **Medical** | Emergency medical and trauma-response analysis |
-| **Navigator** | Nearby hospitals, shelters, bunkers, routes and tactical destinations |
-| **PublicHealth** | Disease/outbreak intelligence, health advisories and public-health analysis |
-| **Verifier** | Evidence generation, cross-source validation and confidence-oriented verification |
+| **MindGuard** | Basic structural input validation, including type, empty-input, length, and control-character checks. This is not a prompt-injection or content-security filter. |
+| **Scavenger** | Extracts crisis context, estimates a threat level, and recommends optional specialist agents. |
+| **Radar** | Reads the latest scheduled global threat snapshot stored in DynamoDB. |
+| **Medical** | Produces concise emergency first-aid guidance, with local fallback protocols for selected scenarios. |
+| **Navigator** | Discovers mapped hospitals and shelters/bunkers near user-provided coordinates and obtains road routes when available. |
+| **PublicHealth** | Collects WHO and ReliefWeb records, generates a clearly separated analysis, and maintains a persistent snapshot. |
+| **Vault** | Generates a rescue beacon and connectivity-related guidance, with a local fallback. |
+| **Verifier** | Compares the user's claim with supplied radar intelligence and returns an evidence-oriented result. |
 
-> The key design choice is not simply having multiple agents — it is having a governed runtime that coordinates them as a fleet.
+The agent metadata and handler registration are maintained in a custom `EnterpriseAgentRegistry`. The runtime adapts registered handlers into Google ADK agents and coordinates their execution.
 
-### Fleet Execution Pattern
+---
+
+## End-to-End Execution Flow
 
 ```text
-                ┌───────────────┐
-                │   MindGuard   │
-                └───────┬───────┘
-                        ↓
-                ┌───────────────┐
-                │   Scavenger   │
-                └───────┬───────┘
-                        ↓
-                ┌───────────────┐
-                │     Radar     │
-                └───────┬───────┘
-                        ↓
-        ┌───────────────┼────────────────┐
-        ↓               ↓                ↓
-     Medical         Navigator       Public Health
-        └───────────────┼────────────────┘
-                        ↓
-                  ┌───────────┐
-                  │  Verifier │
-                  └───────────┘
+User
+  |
+  v
+Next.js web application
+  |
+  v
+POST /api/swarm
+  |
+  v
+Request validation + session initialization
+  |
+  v
+Google ADK InMemoryRunner
+  |
+  v
+MindGuard (basic input validation)
+  |
+  v
+Scavenger (context + routing recommendations)
+  |
+  v
+Radar (latest DynamoDB snapshot)
+  |
+  +-------------------------------+
+  |               |               |
+  v               v               v
+Medical        Navigator       PublicHealth
+  |               |               |
+  +---------------+---------------+
+                  |
+             Optional Vault
+                  |
+                  v
+              Verifier
+                  |
+                  v
+     Persist session state to DynamoDB
+                  |
+                  v
+       Structured API response
+                  |
+                  v
+      Tactical UI, results and map
 ```
 
-The orchestration root is implemented with Google ADK. ChayRa wraps its specialist registry handlers as ADK agents and executes the core crisis path sequentially followed by parallel specialist execution and final verification.
-
----
-
-### From Intent to Action
-
-ChayRa is designed to convert a natural-language crisis request into a real-world operational result — not just a generated answer.
-
-## End-to-End Crisis Flow
-
-A typical request follows this path:
-
-```text
-1. User enters a crisis request
-          ↓
-2. HelpBar sends the request to /api/swarm
-          ↓
-3. MindGuard performs security verification
-          ↓
-4. Scavenger extracts context and tactical requirements
-          ↓
-5. Radar fetches live crisis intelligence
-          ↓
-6. Medical + Navigator + Public Health execute in parallel
-          ↓
-7. Verifier generates an evidence-oriented result
-          ↓
-8. ChayRa persists the situation state
-          ↓
-9. High/critical threats can trigger resilience prediction
-          ↓
-10. Results return to the ActionPanel and live map
-```
-
----
-
-## Real-World Intelligence
-
-ChayRa is designed to combine agent reasoning with external real-world data instead of relying only on model knowledge.
-
-### Current Intelligence Sources
-
-- **NASA EONET** — global environmental and event intelligence
-- **USGS** — seismic and geologic intelligence
-- **Conflict / war-zone intelligence** — tactical crisis context
-- **WHO Disease Outbreak News** — trusted public-health reporting
-- **UN ReliefWeb** — additional humanitarian intelligence when configured
-- **OpenStreetMap Overpass** — real-world facility discovery including hospitals, clinics, shelters and bunkers
-- **Google Cloud Model Armor** — safety/security verification
-
----
-
-## Tactical Navigation
-
-Navigator is designed for real-world action, not generic recommendations.
-
-When coordinates are available, it performs a targeted facility search and can return:
-
-```text
-Hospital / Clinic
-Shelter / Bunker
-Distance
-Latitude / Longitude
-Navigation text
-```
-
-The result is forwarded through the ADK event path and surfaced in the frontend map.
-
-### Production-Proven Behavior
-
-In live production testing, Navigator successfully resolved real hospital and shelter/bunker destinations with distance and destination coordinates, allowing the frontend map to distinguish real navigation data from fallback responses.
-
----
-
-## Public Health Intelligence
-
-The Public Health agent is designed around trusted-source intelligence and persistence.
-
-```text
-WHO / ReliefWeb
-      ↓
-30-day intelligence scan
-      ↓
-Health analysis
-      ↓
-Outbreak reports + advisory
-      ↓
-Firestore snapshot
-      ↓
-Frontend public-health panel + map
-```
-
-When live model analysis is temporarily unavailable, ChayRa preserves the most recent verified public-health snapshot instead of failing to an empty state.
-
-This allows the system to continue surfacing trusted outbreak intelligence while clearly distinguishing live analysis from persisted verified information.
-
----
-
-## Memory & Resilience
-
-ChayRa uses a Firestore-backed memory layer for persistent operational intelligence.
-
-The memory system supports:
-
-- crisis situation state
-- historical threat retrieval
-- public-health snapshots
-- event and response history
-- agent/fleet state
-- resilience prediction for higher-severity situations
-
-The system is designed to preserve useful state even when an individual upstream model or intelligence call temporarily fails.
-
----
-
-## Security & Governance
-
-Security is part of the execution path rather than a post-processing step.
-
-### Model Armor
-
-MindGuard uses Google Cloud Model Armor before downstream crisis processing.
-
-```text
-User Input
-   ↓
-Model Armor / MindGuard
-   ├── MATCH_FOUND → Block
-   └── NO_MATCH_FOUND → Continue
-```
-
-### Runtime Identity
-
-Production Cloud Run services use Google Cloud service-account identity and Application Default Credentials rather than embedding production credentials into the application image.
-
-### Agent Governance
-
-ChayRa maintains its own enterprise agent control layer for metadata, versioning, capabilities, status and clearance — giving the fleet a controlled discovery and execution path around Google ADK.
+The runtime runs the initial validation and context stages, reads the saved radar snapshot, runs applicable specialist agents, and then attempts evidence-oriented verification. Medical is included in each crisis cycle; Navigator is included when valid user coordinates are present; Vault is conditional on Scavenger's recommendation. PublicHealth runs as part of the specialist stage.
 
 ---
 
 ## Architecture
 
-![ChayRa AI 3.0 Architecture](./ChayRa_AI_3_0_Architecture.png)
+![ChayRa AI Architecture](./ChayRa_AI_3_0_Architecture.png)
 
-### High-Level System Flow
+### Application Layer
 
-```text
-User
-  ↓
-Next.js / React UI
-  ↓
-Next.js API Routes (TypeScript)
-  ↓
-Google ADK Swarm
-  ↓
-MindGuard → Scavenger → Radar
-                     ↓
-        Medical | Navigator | Public Health
-                     ↓
-                  Verifier
-                     ↓
-       ┌─────────────┼─────────────┐
-       ↓             ↓             ↓
-   Firestore     Model Armor   Live Sources
-       └─────────────┼─────────────┘
-                     ↓
-              Google Cloud
-                     ↓
-            Verified Action
-```
+- **Next.js 16.3 / React 19** provides the web application and API routes.
+- **TypeScript** is used across the application and server-side agent integrations.
+- **Leaflet / React Leaflet** powers the interactive map experience.
+- **Tailwind CSS**, **Framer Motion**, and **Lucide React** support styling, interaction, and UI assets.
 
----
+### Agent Orchestration Layer
 
-## Google Cloud Production Architecture
+- **Google ADK (`@google/adk`)** provides the agent base classes, in-memory runner, session service, and event execution model currently used by the codebase.
+- **EnterpriseAgentRegistry** stores each agent's handler and metadata, including version, role, status, and clearance level.
+- **ChayRaCrisisFleet** coordinates the crisis stages and specialist execution.
+- **Zod** is included in the application dependencies for schema validation where used.
 
-ChayRa is deployed with a public application service and a separately deployed private runtime service for autonomous/background workloads.
+### Model Inference Layer — Amazon Bedrock
 
-```text
-                     Google Cloud
-                           │
-              ┌────────────┴────────────┐
-              ↓                         ↓
-     chayra-ai-service         chayra-ai-runtime
-          PUBLIC                     PRIVATE
-              │                         │
-              └────────────┬────────────┘
-                           ↓
-                       Firestore
-                           │
-                      Agent State
-                        Memory
-                       Registry
-```
+All agent model inference is routed through a centralized gateway in `src/core/brain/brain.ts`.
 
-### Production Components
+- **Amazon Bedrock Runtime** is accessed through AWS SDK for JavaScript v3.
+- The gateway uses the Bedrock `ConverseCommand` API.
+- The model ID is configurable through `AWS_BEDROCK_MODEL_ID`.
+- The current default model ID in code is `apac.amazon.nova-lite-v1:0`.
+- The default AWS region in the central brain is `ap-south-1`.
+- All agents call the shared `generateText()` function rather than creating separate model-provider integrations.
+- No secondary or tertiary inference providers are enabled in the central brain configuration.
 
-- **Cloud Run — Public Service**: serves the hosted application and API routes
-- **Cloud Run — Private Runtime**: private autonomous runtime service
-- **Firestore**: persistent memory and agent registry state
-- **Cloud Build**: container build, push and deployment pipeline
-- **Google Cloud service account**: runtime identity and permissions
-- **Model Armor**: security gateway
-- **Cloud Logging / tracing**: production observability
+### Persistence Layer — Amazon DynamoDB
+
+A shared DynamoDB document client is initialized lazily using the AWS SDK default credential provider chain.
+
+The application uses a single-table configuration with:
+
+- Partition key: `pk` (`String`)
+- Sort key: `sk` (`String`)
+- Table name: `CHAYRA_DATA_TABLE`
+
+Current persisted records include:
+
+| Record | Partition key (`pk`) | Sort key (`sk`) | Purpose |
+|---|---|---|---|
+| Session state | `SESSION#<sessionId>` | `STATE` | Crisis context, threat level, intelligence summary, event log, and expiry timestamp |
+| Radar snapshot | `RADAR` | `GLOBAL_THREATS` | Latest scheduled NASA/USGS threat snapshot |
+| Public-health snapshot | `PUBLIC_HEALTH` | `GLOBAL_HEALTH_WATCH` | Public-health advisory, official alerts, outbreak analysis, and metadata |
+
+Session records receive an `expiresAt` Unix timestamp approximately 30 days after update. Configure DynamoDB TTL on `expiresAt` if automatic background expiry is desired; application reads also perform an expiry check.
 
 ---
 
-## Production Evidence
+## AWS Configuration
 
-ChayRa is live on Google Cloud Run and has been exercised through the complete crisis-response path.
+The current model and persistence integrations use AWS services.
 
-### Verified in Production
+| Variable | Purpose | Required |
+|---|---|---|
+| `AWS_REGION` | AWS region used by the Bedrock and DynamoDB clients | Recommended |
+| `AWS_DEFAULT_REGION` | Fallback region for the DynamoDB client | Optional fallback |
+| `AWS_ACCESS_KEY_ID` | Explicit AWS access key when not using an IAM role | Optional with IAM role |
+| `AWS_SECRET_ACCESS_KEY` | Explicit AWS secret key paired with the access key | Optional with IAM role |
+| `AWS_SESSION_TOKEN` | Session token for temporary credentials | Optional |
+| `AWS_BEDROCK_MODEL_ID` | Amazon Bedrock model ID | Optional; defaults to `apac.amazon.nova-lite-v1:0` |
+| `BRAIN_MAX_OUTPUT_TOKENS` | Central Brain maximum output token setting | Optional; defaults to `1536` and is bounded by code |
+| `CHAYRA_DATA_TABLE` | DynamoDB table name | Required for persistence |
+| `CRON_SECRET` | Bearer secret protecting the scheduled radar endpoint | Required for that endpoint |
+| `RELIEFWEB_APPNAME` | ReliefWeb API application name | Required for ReliefWeb requests |
+| `CHAYRA_ROUTING_URL` | OSRM-compatible routing base URL | Optional; defaults to the public OSRM demo endpoint |
 
-- ✅ Google ADK multi-agent execution
-- ✅ Model Armor security verification
-- ✅ Real hospital / shelter / bunker discovery
-- ✅ Real destination coordinates returned to the API
-- ✅ Firestore persistence
-- ✅ WHO public-health intelligence retrieval
-- ✅ Verifier execution
-- ✅ Public Cloud Run deployment
-- ✅ Private runtime deployment
-- ✅ Background radar execution
+The DynamoDB table must have string partition and sort keys named `pk` and `sk`. Enable TTL on `expiresAt` if you want DynamoDB to remove expired session items asynchronously.
 
-### Example Operational Result
+Use an IAM role or another supported AWS credential-provider-chain mechanism in deployed environments wherever possible. Do not commit access keys, session tokens, cron secrets, or other credentials to the repository.
 
-A production Navigator execution successfully resolved real nearby hospital and shelter/bunker destinations and returned destination coordinates with an explicit real-data signal for frontend rendering.
-
----
-
-## Why ChayRa Fits the Judging Criteria
-
-### 40% — Innovation & Operational Utility
-
-ChayRa turns one natural-language crisis request into an autonomous workflow spanning live threat intelligence, medical analysis, real-world navigation, public-health intelligence and evidence verification.
-
-### 30% — Architectural Discipline & Tech Stack
-
-The system combines Google ADK with a custom enterprise agent control layer, Firestore-backed memory, Model Armor security, structured agent execution and Google Cloud production infrastructure.
-
-### 30% — Demo & Production Readiness
-
-ChayRa is deployed on Cloud Run and has been exercised end-to-end with real external intelligence, real destination coordinates, persistent state and production security controls.
-
-
+The application needs IAM permissions for the Bedrock model invocation operations used by the configured model and DynamoDB read/write operations on the configured table. Scope permissions to the required model and table resources where supported.
 
 ---
 
-## Observability
+## API Routes
 
-ChayRa includes operational visibility across the agent fleet.
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/swarm` | `POST` | Validates the crisis request, runs the agent fleet, persists session state, and returns structured results. |
+| `/api/background-radar` | `GET` | Read-only endpoint for the most recent DynamoDB radar snapshot. |
+| `/api/cron/radar` | `GET` | Authenticated scheduled scan of NASA EONET and USGS followed by snapshot persistence. Requires `Authorization: Bearer <CRON_SECRET>`. |
+| `/api/public-health` | `GET` | Returns a fresh DynamoDB public-health snapshot when available, otherwise refreshes from the PublicHealth agent and falls back to last-known-good state when possible. |
 
-Examples include:
-
-```text
-Trace ID
-Agent identity
-Agent status
-ADK events
-Fleet heartbeat
-Cloud Run request logs
-Persisted registry state
-Public-health source status
-Navigator real-data resolution
-```
-
-A production Navigator result, for example, can be resolved with real destination coordinates and an explicit real-data flag before the API returns the result to the frontend.
+The scheduled radar route should be called by a trusted scheduler with the configured bearer secret. Do not expose `CRON_SECRET` in client-side code.
 
 ---
 
-## Failure Handling
+## External Intelligence and Mapping Sources
 
-Real-world crisis systems cannot assume every external dependency will always respond.
+| Source | Use |
+|---|---|
+| **NASA EONET** | Global environmental events and event coordinates. |
+| **USGS Earthquake Hazards Program** | Recent earthquake event feed. |
+| **WHO Disease Outbreak News** | Official disease outbreak publications. |
+| **UN ReliefWeb** | Humanitarian and public-health reports. |
+| **OpenStreetMap Overpass API** | Mapped facilities such as hospitals, clinics, shelters, and bunkers. |
+| **OSRM** | Road-route geometry and distance/duration when available. |
 
-ChayRa therefore uses layered degradation:
+External availability, data coverage, mapping completeness, and update frequency depend on the respective providers. A mapped facility is not confirmation that it is open, staffed, accessible, or safe. A route or straight-line estimate is not a guarantee of travel conditions.
 
-```text
-Model / API failure
-      ↓
-Agent-level fallback
-      ↓
-Persisted snapshot / prior state
-      ↓
-Safe operational response
-```
+---
 
-Examples include:
+## Reliability and Failure Handling
 
-- Public-health snapshot fallback
-- Navigator fallback messaging
-- Safe Model Armor degradation
-- Persisted Firestore state
-- Structured API error responses
-- Local rescue-beacon fallback capability
+ChayRa uses several forms of graceful degradation where implemented:
 
-The goal is to **fail safely rather than fail silently**.
+- If a model call fails, selected agents return local fallback guidance or a locally generated rescue-beacon identifier.
+- If one specialist fails during the parallel stage, the runtime logs the failure and continues collecting other completed specialist results.
+- If a radar scan source fails, the scan can preserve partial results from the other source; if both sources fail, the previous DynamoDB snapshot is not overwritten.
+- If public-health refresh fails, the system can serve a previously stored verified snapshot when one is available.
+- If OSRM routing is unavailable, Navigator can return a straight-line distance estimate and labels it as such.
+- Persistence failures are logged and are designed not to discard an otherwise completed crisis response in the relevant memory-write paths.
+
+These fallbacks improve resilience but do not guarantee uninterrupted operation. Always follow local emergency services and official safety instructions.
+
+---
+
+## Security Notes and Limitations
+
+- MindGuard currently performs **basic structural input validation only**. It is not a prompt-injection detector, malware scanner, or content moderation service.
+- The Verifier is evidence-oriented model assistance, not a formal fact-checking authority. Its output depends on the supplied radar snapshot and should be independently checked for consequential decisions.
+- Medical output is general first-aid assistance, not diagnosis or a substitute for emergency medical care.
+- OpenStreetMap facility records do not establish current facility status or safety.
+- The frontend should not receive AWS credentials or server-only secrets.
+- Protect scheduled endpoints, configure least-privilege IAM policies, and review logs for sensitive information before production use.
 
 ---
 
@@ -526,36 +289,40 @@ The goal is to **fail safely rather than fail silently**.
 
 - Next.js 16.3
 - React 19
-- TypeScript
-- React Leaflet / Leaflet
-- Tailwind CSS
-- Lucide React
+- TypeScript 5
+- Tailwind CSS 4
+- Leaflet / React Leaflet
 - Framer Motion
+- Lucide React
 
-### Agent & AI
+### Agent Runtime
 
-- Google ADK
-- Google GenAI SDK
-- Gemini 3.5 Flash
-- Vertex AI
-- Google Cloud Model Armor
+- Google ADK (`@google/adk`)
+- Google GenAI SDK (`@google/genai`) for ADK content/session integration in the current route
+- Custom `EnterpriseAgentRegistry`
+- Custom `ChayRaCrisisFleet` orchestration runtime
 
-### Google Cloud
+### AI Inference
 
-- Cloud Run
-- Firestore
-- Cloud Build
-- Google Cloud service accounts / IAM
-- Cloud Logging / trace infrastructure
+- Amazon Bedrock Runtime
+- AWS SDK for JavaScript v3
+- Bedrock Converse API
+- Configurable Bedrock model ID (default: Amazon Nova Lite)
 
-### Data & Intelligence
+### AWS Persistence
+
+- Amazon DynamoDB
+- DynamoDB Document Client
+- AWS SDK default credential provider chain
+
+### External Data
 
 - NASA EONET
-- USGS
+- USGS Earthquake Hazards Program
 - WHO Disease Outbreak News
 - UN ReliefWeb
 - OpenStreetMap Overpass
-- Geospatial / mapping services
+- OSRM
 
 ---
 
@@ -563,47 +330,31 @@ The goal is to **fail safely rather than fail silently**.
 
 ```text
 chayraai/
+├── public/                         # Static assets
 ├── src/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── background-radar/
-│   │   │   ├── background-radar-worker/
-│   │   │   ├── public-health/
-│   │   │   ├── swarm/
-│   │   │   └── test-models/
+│   │   │   ├── background-radar/   # Read-only radar snapshot API
+│   │   │   ├── cron/radar/          # Scheduled global scan endpoint
+│   │   │   ├── public-health/       # Public-health snapshot API
+│   │   │   └── swarm/               # Main crisis-response endpoint
+│   │   ├── globals.css
 │   │   ├── layout.tsx
-│   │   ├── page.tsx
-│   │   └── globals.css
-│   │
-│   ├── components/
-│   │   ├── ActionPanel.tsx
-│   │   ├── HelpBar.tsx
-│   │   ├── MapCore.tsx
-│   │   └── MapWidget.tsx
-│   │
+│   │   └── page.tsx
+│   ├── components/                  # Tactical UI, map, and action panels
 │   └── core/
 │       ├── adk/
-│       │   ├── registry.ts
-│       │   ├── registry-store.ts
-│       │   ├── registry-heartbeat.ts
-│       │   ├── memory.ts
-│       │   └── runtime.ts
-│       │
-│       └── agents/
-│           ├── mindguard.ts
-│           ├── scavenger.ts
-│           ├── radar.ts
-│           ├── medical.ts
-│           ├── navigator.ts
-│           ├── publicHealth.ts
-│           ├── verifier.ts
-│           └── vault.ts
-│
-├── public/
+│       │   ├── memory.ts            # DynamoDB-backed session and health memory
+│       │   ├── registry.ts          # Agent metadata and handler registry
+│       │   └── runtime.ts           # ADK-based crisis fleet orchestration
+│       ├── agents/                  # Specialist agent handlers
+│       ├── aws/
+│       │   ├── dynamo.ts            # Shared DynamoDB client and table config
+│       │   └── radar-snapshot.ts    # Radar snapshot persistence
+│       └── brain/
+│           └── brain.ts             # Central Amazon Bedrock inference gateway
+├── ChayRa_AI_3_0_Architecture.png
 ├── Dockerfile
-├── cloudbuild.yaml
-├── next.config.ts
-├── instrumentation.ts
 ├── package.json
 └── README.md
 ```
@@ -612,235 +363,95 @@ chayraai/
 
 ## Local Development
 
-### Requirements
+### Prerequisites
 
-- Node.js 20+
+- Node.js compatible with the project's Next.js version
 - npm
-- Google Cloud project
-- Required Google Cloud APIs enabled
-- Firestore configured
-- Model Armor configured
-- Valid local development credentials / environment variables
+- AWS account access for Bedrock and DynamoDB-backed functionality
+- A DynamoDB table configured with string keys `pk` and `sk`
 
-### Install
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/ranajitdharpersonal/chayraai.git
 cd chayraai
+```
+
+### 2. Install dependencies
+
+```bash
 npm install
 ```
 
-### Environment
+### 3. Configure environment variables
 
-Create `.env.local` with the credentials and configuration required by your environment.
+Create a `.env.local` file in the project root and add the required configuration. Example:
 
-Typical production-related values include:
-
-```env
-GOOGLE_CLOUD_PROJECT_ID=
-GOOGLE_CLOUD_LOCATION=
-MODEL_ARMOR_LOCATION=
-MODEL_ARMOR_TEMPLATE_ID=
-
-GOOGLE_CLIENT_EMAIL=
-GOOGLE_PRIVATE_KEY=
-
-RELIEFWEB_APPNAME=
+```dotenv
+AWS_REGION=ap-south-1
+AWS_BEDROCK_MODEL_ID=apac.amazon.nova-lite-v1:0
+CHAYRA_DATA_TABLE=your-dynamodb-table-name
+RELIEFWEB_APPNAME=your-reliefweb-app-name
+CRON_SECRET=replace-with-a-long-random-secret
 ```
 
-> Never commit secrets or private keys to Git.
+Configure AWS credentials through the AWS SDK default credential provider chain or use an IAM role in your deployment environment. Add explicit credential variables only when appropriate for your environment. Never commit `.env.local`.
 
-### Run Locally
+### 4. Start the development server
 
 ```bash
 npm run dev
 ```
 
-Open:
+Open [http://localhost:3000](http://localhost:3000).
 
-```text
-http://localhost:3000
-```
-
-### Production Build
+### 5. Build for production
 
 ```bash
 npm run build
-npm start
+npm run start
 ```
 
----
+### Available scripts
 
-## Deployment
-
-ChayRa uses Cloud Build to create and deploy the production container image.
-
-The deployment pipeline:
-
-```text
-Git commit
-   ↓
-Cloud Build
-   ↓
-Docker build
-   ↓
-Container image
-   ↓
-Container Registry
-   ↓
-Cloud Run public service
-   ↓
-Cloud Run private runtime
-```
-
-The production application currently runs on Google Cloud Run.
+| Command | Description |
+|---|---|
+| `npm run dev` | Starts the Next.js development server. |
+| `npm run build` | Creates a production build. |
+| `npm run start` | Starts the production server. |
+| `npm run lint` | Runs ESLint. |
 
 ---
 
-## Testing the Core Workflow
+## Deployment Considerations
 
-For a fast end-to-end check:
+The repository includes a `Dockerfile` and is structured as a Node.js/Next.js application. Deploy the application to a hosting environment that supports the required Node.js runtime, outbound HTTPS requests, environment variables, and AWS SDK credentials.
 
-```text
-1. Open the hosted application
-2. Provide a location using GPS or Drop Pin
-3. Enter a request such as:
+Before deploying:
 
-   "I need help"
+1. Configure the runtime AWS region and an IAM role or secure credentials.
+2. Grant the required Bedrock model invocation permissions.
+3. Create the DynamoDB table with `pk` and `sk` string keys; enable TTL on `expiresAt` if desired.
+4. Set `CHAYRA_DATA_TABLE`, `AWS_BEDROCK_MODEL_ID`, and other required server-side variables.
+5. Configure a trusted scheduler to call `/api/cron/radar` with the `CRON_SECRET` bearer token.
+6. Set `RELIEFWEB_APPNAME` if ReliefWeb integration is enabled.
+7. Configure the public application URL and any production-specific routing endpoint.
+8. Verify the production logs, API responses, agent execution, persistence, and external-source behavior.
 
-4. Observe:
-   MindGuard
-   Scavenger
-   Radar
-
-5. Watch the specialist agents execute:
-   Medical
-   Navigator
-   Public Health
-
-6. Review:
-   Hospital / bunker result
-   Map destination
-   Public-health intelligence
-   Truth verification
-   Resilience state
-```
+The current code confirms AWS-backed Bedrock inference and DynamoDB persistence. The actual hosting provider and deployment environment should be determined from the deployment configuration used for the target environment, not inferred from the AWS data integrations alone.
 
 ---
 
-## Production Evidence
+## Contributing
 
-ChayRa is live on Google Cloud Run and has been exercised through the complete crisis-response path.
-
-### Verified in Production
-
-- ✅ Google ADK multi-agent execution
-- ✅ Model Armor security verification
-- ✅ Real hospital / shelter / bunker discovery
-- ✅ Real destination coordinates returned to the API
-- ✅ Firestore persistence
-- ✅ WHO public-health intelligence retrieval
-- ✅ Verifier execution
-- ✅ Public Cloud Run deployment
-- ✅ Private runtime deployment
-- ✅ Background radar execution
-
-### Example Operational Result
-
-A production Navigator execution successfully resolved real nearby hospital and shelter/bunker destinations and returned destination coordinates with an explicit real-data signal for frontend rendering.
-
----
-
-## Hackathon Value
-
-## The ChayRa Thesis
-
-> **During a crisis, the AI should do more than answer. It should coordinate.**
-
-A single request can activate safety verification, crisis understanding, live intelligence, medical reasoning, real-world facility search, public-health analysis, evidence verification, persistent state and actionable map output.
-
-**That is the difference between a chatbot and an autonomous crisis-response fleet.**
-
----
-
-### Demo Video
-
-[Watch the full ChayRa AI demo on YouTube](https://youtu.be/X2GPxNOW8BQ)
-
-### Judge Demo Flow
-
-```text
-Open ChayRa
-   ↓
-Set / confirm location
-   ↓
-"I need help"
-   ↓
-MindGuard
-   ↓
-Scavenger
-   ↓
-Radar
-   ↓
-Medical + Navigator + Public Health
-   ↓
-Verifier
-   ↓
-Hospital / Bunker + Map
-   ↓
-Public Health + Evidence
-   ↓
-Cloud Run / Google Cloud proof
-```
-
-> A polished demo video will show the live system rather than a simulated sequence.
-
----
-
-## Known Limitations
-
-ChayRa is an active crisis-response prototype and should not be treated as a substitute for official emergency services.
-
-External intelligence sources can experience:
-
-- rate limits
-- temporary outages
-- stale information
-- regional coverage gaps
-
-Model-based analysis can also encounter temporary capacity exhaustion. ChayRa therefore uses fallbacks and persisted snapshots where possible.
-
----
-
-## Future Evolution
-
-- deeper long-running autonomous workflows
-- stronger multi-session identity and memory
-- broader resilience forecasting
-- richer offline / mesh-rescue capabilities
-
----
-
-## Built With
-
-**Next.js • React • TypeScript • Google ADK • Gemini • Vertex AI • Model Armor • Cloud Run • Firestore • Cloud Build • Leaflet • OpenTelemetry**
-
----
-
-## Creator
-
-### Ranajit Dhar
-
-ChayRa AI is a solo-built autonomous crisis-response system created for the **All Things Agentic Hackathon**.
-
-Built to explore one question:
-
-> **What happens when AI stops being a chatbot and starts behaving like an operational response fleet?**
+Contributions, bug reports, and improvement suggestions are welcome. For substantial changes, open an issue first to discuss the proposed implementation. Please avoid committing secrets, generated build artifacts, or local environment files.
 
 ---
 
 ## License
 
-This project is provided for hackathon and demonstration purposes.
+This project is distributed under the license included in the [`LICENSE`](./LICENSE) file.
 
-Check the repository for the latest project-specific licensing terms.
+---
+
+**Built by [Ranajit Dhar](https://github.com/ranajitdharpersonal).**
