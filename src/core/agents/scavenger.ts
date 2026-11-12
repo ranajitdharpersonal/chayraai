@@ -1,41 +1,85 @@
-import { EnterpriseAgentRegistry } from '../adk/registry';
-import { vertexAI } from '../adk/registry';
 
-// Initialize the native model
-const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
+import { EnterpriseAgentRegistry } from '../adk/registry';
+import { generateText } from '../brain/brain';
 
 async function runScavenger(data: { input: string }) {
-  console.log(`[Scavenger]: Extracting tactical context using Native Vertex AI...`);
-  
+  console.log(
+    '[Scavenger]: Extracting tactical context through Central Brain...',
+  );
+
   try {
     const prompt = `
-      You are the Scavenger agent for an emergency response system.
-      Analyze the following crisis input: "${data.input}"
-      Extract the threat level (HIGH, LOW, CRITICAL) and determine which of these agents are required: Medical, Navigator, Vault.
-      Return strictly a JSON object with keys: "threatLevel" (string) and "requiredAgents" (array of strings).
-    `;
-    
-    const resp = await generativeModel.generateContent(prompt);
-    const responseText = resp.response.candidates?.[0].content.parts[0].text || "{}";
-    
-    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleanJson);
+You are the Scavenger agent for an emergency response system.
 
+Analyze the crisis input:
+${data.input}
+
+Extract:
+- threatLevel: HIGH, LOW, MEDIUM, or CRITICAL
+- requiredAgents: choose from Medical, Navigator, Vault
+
+Return strictly a JSON object:
+{
+  "threatLevel": "string",
+  "requiredAgents": ["Medical", "Navigator"]
+}
+`;
+
+    const responseText = await generateText(prompt);
+
+    const cleanJson = responseText
+      .replace(/```json/g, '')
+      .replace(/```/g, '')
+      .trim();
+
+    const result = JSON.parse(cleanJson);
+
+    const validLevels = [
+      'LOW',
+      'MEDIUM',
+      'HIGH',
+      'CRITICAL',
+    ];
+
+    const validAgents = [
+      'Medical',
+      'Navigator',
+      'Vault',
+    ];
+
+    return {
+      threatLevel: validLevels.includes(
+        String(result?.threatLevel).toUpperCase(),
+      )
+        ? String(result.threatLevel).toUpperCase()
+        : 'UNKNOWN',
+
+      requiredAgents: Array.isArray(result?.requiredAgents)
+        ? result.requiredAgents.filter(
+            (agent: string) => validAgents.includes(agent),
+          )
+        : ['Medical', 'Navigator'],
+    };
   } catch (error) {
-    console.error("[Scavenger]: Parsing failed, falling back to default protocols.", error);
-    // Fail-safe returns all agents just in case
-    return { threatLevel: "UNKNOWN", requiredAgents: ["Medical", "Navigator", "Vault"] };
+    console.error(
+      '[Scavenger]: Central Brain unavailable. Using safe defaults.',
+      error,
+    );
+
+    return {
+      threatLevel: 'UNKNOWN',
+      requiredAgents: ['Medical', 'Navigator', 'Vault'],
+    };
   }
 }
 
-// Zero-Trust Registration
 EnterpriseAgentRegistry.registerAgent(
   {
     name: 'Scavenger',
     version: '3.0.0',
     role: 'Context & Intent Extractor',
     status: 'ACTIVE',
-    clearanceLevel: 'TIER_1'
+    clearanceLevel: 'TIER_1',
   },
-  runScavenger
+  runScavenger,
 );

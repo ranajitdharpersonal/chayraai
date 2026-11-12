@@ -1,124 +1,110 @@
+
 import { NextResponse } from 'next/server';
 
-import {
-  EnterpriseAgentRegistry,
-} from '@/core/adk/registry';
+import { EnterpriseAgentRegistry } from '@/core/adk/registry';
+import { PredictiveMemoryBank } from '@/core/adk/memory';
 
-import {
-  PredictiveMemoryBank,
-} from '@/core/adk/memory';
-
-// Ensure the PublicHealth handler registers itself.
 import '@/core/agents/publicHealth';
 
-// Public Health is intentionally cached for the background/normal UI path,
-// but the dedicated Health tab can request a live refresh explicitly with:
-// GET /api/public-health?refresh=1
-const CACHE_TTL_MS =
-  24 * 60 * 60 * 1000;
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
-export async function GET(
-  request: Request,
-) {
-  const url =
-    new URL(
-      request.url,
-    );
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-  const forceRefresh =
-    url.searchParams.get(
-      'refresh',
-    ) === '1';
+// ============================================================
+// PUBLIC HEALTH API — 24 HOUR CACHE
+// ============================================================
 
+export async function GET() {
   try {
     const cached =
-      await PredictiveMemoryBank
-        .getPublicHealthState();
+      await PredictiveMemoryBank.getPublicHealthState();
 
-    const cachedTimestamp =
-      cached?.analysisTimestamp;
+    const timestamp = cached?.analysisTimestamp;
 
     const cachedAge =
-      typeof cachedTimestamp ===
-      'string'
-        ? Date.now() -
-          new Date(
-            cachedTimestamp,
-          ).getTime()
+      typeof timestamp === 'string'
+        ? Date.now() - new Date(timestamp).getTime()
         : Number.POSITIVE_INFINITY;
 
-    // Preserve the existing low-cost cache behavior for
-    // normal requests. The Health tab can explicitly bypass
-    // this cache with ?refresh=1.
+    // ✅ ADD THIS HERE
+    const cachedSourceStatus =
+      cached?.metadata?.sourceStatus ??
+      cached?.sourceStatus ??
+      'UNAVAILABLE';
+
+    // Return fresh cached state.
     if (
-      !forceRefresh &&
       cached &&
-      Number.isFinite(
-        cachedAge,
-      ) &&
+      cachedSourceStatus !== 'UNAVAILABLE' &&
+      Number.isFinite(cachedAge) &&
       cachedAge >= 0 &&
       cachedAge < CACHE_TTL_MS
     ) {
-      return NextResponse.json({
-        type: 'success',
-        source: 'cache',
-        ...cached,
-      });
+      return NextResponse.json(
+        {
+          type: 'success',
+          source: 'cache',
+          ...cached,
+        },
+        {
+          headers: { 'Cache-Control': 'no-store' },
+        },
+      );
     }
 
+    // Refresh only when the saved snapshot is stale.
     const handler =
-      EnterpriseAgentRegistry
-        .getAgent(
-          'PublicHealth',
-        );
+      EnterpriseAgentRegistry.getAgent('PublicHealth');
+
+    if (typeof handler !== 'function') {
+      throw new Error('PublicHealth agent is unavailable.');
+    }
 
     console.log(
-      `[Public Health API]: ${
-        forceRefresh
-          ? 'Forcing live source refresh.'
-          : 'Refreshing stale public-health snapshot.'
-      }`,
+      '[Public Health API]: Refreshing expired health snapshot.',
     );
 
-    const result =
-      await handler({
-        location:
-          'Global',
-      });
-
-    return NextResponse.json({
-      type: 'success',
-      source: 'live',
-      ...result,
+    const result = await handler({
+      location: 'Global',
     });
-  } catch (error: any) {
+
+    return NextResponse.json(
+      {
+        type: 'success',
+        source: 'live',
+        ...result,
+      },
+      {
+        headers: { 'Cache-Control': 'no-store' },
+      },
+    );
+  } catch (error) {
     console.error(
-      '[Public Health API]: Failed to load intelligence.',
+      '[Public Health API]: Intelligence retrieval failed.',
       error,
     );
 
-    // Preserve the existing last-known-good fallback.
+    // Last-known-good fallback.
     try {
       const cached =
-        await PredictiveMemoryBank
-          .getPublicHealthState();
+        await PredictiveMemoryBank.getPublicHealthState();
 
       if (cached) {
-        return NextResponse.json({
-          type: 'success',
-          source:
-            'last-known-good',
-          ...cached,
-          metadata: {
-            ...(cached as any).metadata,
-            snapshotStatus:
-              'LAST_KNOWN_GOOD',
+        return NextResponse.json(
+          {
+            type: 'success',
+            source: 'last-known-good',
+            ...cached,
           },
-        });
+          {
+            headers: { 'Cache-Control': 'no-store' },
+          },
+        );
       }
     } catch (fallbackError) {
       console.error(
-        '[Public Health API]: Snapshot fallback failed.',
+        '[Public Health API]: Cached fallback failed.',
         fallbackError,
       );
     }
@@ -126,11 +112,11 @@ export async function GET(
     return NextResponse.json(
       {
         type: 'error',
-        message:
-          'Public-health intelligence is temporarily unavailable.',
+        message: 'Public-health intelligence is temporarily unavailable.',
       },
       {
         status: 503,
+        headers: { 'Cache-Control': 'no-store' },
       },
     );
   }

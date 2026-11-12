@@ -1,7 +1,6 @@
-import { EnterpriseAgentRegistry, vertexAI } from '../adk/registry';
+import { EnterpriseAgentRegistry } from '../adk/registry';
 import { PredictiveMemoryBank } from '../adk/memory';
-
-const generativeModel = vertexAI.getGenerativeModel({ model: 'gemini-3.5-flash' });
+import { generateText } from '../brain/brain';
 
 interface OfficialAlert {
   id: string;
@@ -234,8 +233,89 @@ async function runPublicHealth(data: { location?: string }): Promise<PublicHealt
 
   console.log(`[Public Health]: Scanning the last ${LOOKBACK_DAYS} days of trusted health intelligence...`);
 
-  const previousHealthState = await PredictiveMemoryBank.getPublicHealthState();
-  const previousAgeDays = calculateSnapshotAgeDays(previousHealthState?.analysisTimestamp);
+  const previousHealthState =
+    await PredictiveMemoryBank.getPublicHealthState();
+
+  const previousTimestamp =
+    previousHealthState?.metadata?.analysisTimestamp ??
+    previousHealthState?.analysisTimestamp;
+
+  const previousAgeMs =
+    typeof previousTimestamp === 'string'
+      ? now.getTime() - new Date(previousTimestamp).getTime()
+      : Number.POSITIVE_INFINITY;
+
+  const previousAgeDays =
+    calculateSnapshotAgeDays(previousTimestamp);
+
+  const previousSourceStatus =
+    previousHealthState?.metadata?.sourceStatus ??
+    previousHealthState?.sourceStatus ??
+    'UNAVAILABLE';
+
+  const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+  // Return a fresh cached snapshot before making external
+  // API requests or calling Amazon Bedrock.
+  if (
+    previousHealthState &&
+    typeof previousTimestamp === 'string' &&
+    Number.isFinite(previousAgeMs) &&
+    previousAgeMs >= 0 &&
+    previousAgeMs < CACHE_TTL_MS &&
+    previousSourceStatus !== 'UNAVAILABLE'
+  ) {
+    const cachedMetadata =
+      previousHealthState.metadata ?? {};
+
+    console.log(
+      '[Public Health]: Using fresh DynamoDB snapshot. Skipping external APIs and Bedrock inference.',
+    );
+
+    return {
+      healthAdvisory:
+        previousHealthState.healthAdvisory ||
+        'No advisory available.',
+
+      officialAlerts:
+        Array.isArray(previousHealthState.officialAlerts)
+          ? previousHealthState.officialAlerts as OfficialAlert[]
+          : [],
+
+      outbreakReports:
+        Array.isArray(previousHealthState.outbreakReports)
+          ? previousHealthState.outbreakReports as OutbreakReport[]
+          : [],
+
+      metadata: {
+        analysisTimestamp: previousTimestamp,
+
+        source:
+          cachedMetadata.source ||
+          previousHealthState.source ||
+          'WHO Disease Outbreak News + UN ReliefWeb',
+
+        sourceStatus: previousSourceStatus,
+
+        snapshotStatus:
+          cachedMetadata.snapshotStatus === 'NO_DATA'
+            ? 'NO_DATA'
+            : 'LAST_KNOWN_GOOD',
+
+        snapshotAgeDays: previousAgeDays,
+
+        verificationPolicy:
+          cachedMetadata.verificationPolicy ||
+          'Official records are separated from model inference.',
+
+        forecastWindow:
+          cachedMetadata.forecastWindow || '15 days',
+
+        lookbackDays:
+          cachedMetadata.lookbackDays || 30,
+      },
+    };
+  }
 
   let reliefWebError: string | null = null;
   let whoError: string | null = null;
@@ -323,16 +403,14 @@ Return ONLY JSON:
 }
 `;
 
-    const resp = await generativeModel.generateContent(prompt);
-    const rawText =
-      resp.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const rawText = await generateText(prompt);
     const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
 
     let result: any = {};
     try {
       result = JSON.parse(cleanJson);
     } catch {
-      console.warn('[Public Health]: Gemini returned malformed JSON.');
+      console.warn('[Public Health]: Central Brain returned malformed JSON.');
     }
 
     const outbreakReports: OutbreakReport[] =
