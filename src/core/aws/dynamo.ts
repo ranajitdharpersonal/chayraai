@@ -22,7 +22,7 @@ export function getDynamoDocumentClient(): DynamoDBDocumentClient {
   const region =
     process.env.AWS_REGION ||
     process.env.AWS_DEFAULT_REGION ||
-    'ap-south-1';
+    'us-east-1';
 
   const client = new DynamoDBClient({
     region,
