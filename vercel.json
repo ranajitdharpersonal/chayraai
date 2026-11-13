@@ -1,10 +1,22 @@
-
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
       "path": "/api/cron/radar",
       "schedule": "30 3 * * *"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "chayraai.vercel.app"
+        }
+      ],
+      "destination": "https://chayra.ranajitdhar.in/:path*",
+      "permanent": true
     }
   ]
 }
