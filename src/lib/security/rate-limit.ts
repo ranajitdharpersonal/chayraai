@@ -1,13 +1,18 @@
 
 import { createHash } from 'node:crypto';
+import { isIP } from 'node:net';
 
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
 
 // ============================================================
-// CHAYRA AI — DISTRIBUTED RATE LIMIT FOUNDATION
+// CHAYRA AI — DISTRIBUTED RATE LIMIT ENGINE
 // Provider: Upstash Redis
-// Default mode: OBSERVE (never blocks requests)
+// Default mode: OBSERVE
+//
+// OBSERVE: Record rate-limit decisions, never block.
+// ENFORCE: Apply rate-limit decisions.
+// Redis failure: Fail open to preserve crisis-response availability.
 // ============================================================
 
 export type RateLimitMode = 'observe' | 'enforce';
@@ -30,10 +35,15 @@ export interface RateLimitResult {
 }
 
 const DEFAULT_TIMEOUT_MS = 1500;
+const MAX_IDENTIFIER_LENGTH = 256;
 
 const limiterCache = new Map<string, Ratelimit>();
 
 let redisClient: Redis | null = null;
+
+// ============================================================
+// 1. RATE LIMIT MODE
+// ============================================================
 
 function getMode(): RateLimitMode {
   return process.env.CHAYRA_RATE_LIMIT_MODE === 'enforce'
@@ -41,18 +51,20 @@ function getMode(): RateLimitMode {
     : 'observe';
 }
 
+// ============================================================
+// 2. REDIS CLIENT
+// ============================================================
+
 function getRedisClient(): Redis {
   if (redisClient) {
     return redisClient;
   }
 
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
+  const url = process.env.KV_REST_API_URL?.trim();
+  const token = process.env.KV_REST_API_TOKEN?.trim();
 
   if (!url || !token) {
-    throw new Error(
-      'Upstash configuration is missing. Check KV_REST_API_URL and KV_REST_API_TOKEN.',
-    );
+    throw new Error('Upstash configuration is missing.');
   }
 
   redisClient = new Redis({
@@ -63,16 +75,33 @@ function getRedisClient(): Redis {
   return redisClient;
 }
 
-function getLimiter(policy: RateLimitPolicy): Ratelimit {
+// ============================================================
+// 3. POLICY VALIDATION & LIMITER CACHE
+// ============================================================
+
+function validatePolicy(policy: RateLimitPolicy): void {
   if (
-    !policy.namespace ||
-    !/^[a-zA-Z0-9_-]+$/.test(policy.namespace) ||
+    !policy ||
+    typeof policy.namespace !== 'string' ||
+    !/^[a-zA-Z0-9_-]{1,64}$/.test(policy.namespace) ||
     !Number.isInteger(policy.limit) ||
     policy.limit < 1 ||
+    policy.limit > 1_000_000 ||
+    typeof policy.window !== 'string' ||
     !/^\d+ [smh]$/.test(policy.window)
   ) {
     throw new Error('Invalid rate-limit policy.');
   }
+
+  const duration = Number(policy.window.split(' ')[0]);
+
+  if (!Number.isSafeInteger(duration) || duration < 1) {
+    throw new Error('Invalid rate-limit window.');
+  }
+}
+
+function getLimiter(policy: RateLimitPolicy): Ratelimit {
+  validatePolicy(policy);
 
   const cacheKey = [
     policy.namespace,
@@ -101,35 +130,49 @@ function getLimiter(policy: RateLimitPolicy): Ratelimit {
   return limiter;
 }
 
-function hashIdentifier(identifier: string): string {
-  return createHash('sha256')
-    .update(identifier)
-    .digest('hex');
-}
+// ============================================================
+// 4. TRUSTED CLIENT IP IDENTIFICATION
+// ============================================================
 
-// Read the client IP supplied by the hosting proxy.
-// Do not accept arbitrary client-provided identifiers.
+/**
+ * Vercel supplies x-real-ip at the hosting proxy.
+ *
+ * We intentionally do not fall back to the first
+ * x-forwarded-for value because arbitrary forwarded
+ * values can be client-controlled in other proxy setups.
+ *
+ * For non-Vercel deployments, configure an explicitly
+ * trusted proxy before changing this logic.
+ */
 export function getClientIp(request: Request): string | null {
-  const realIp = request.headers.get('x-real-ip')?.trim();
+  const candidate = request.headers
+    .get('x-real-ip')
+    ?.trim();
 
-  if (realIp) {
-    return realIp.toLowerCase();
-  }
-
-  const forwardedFor =
-    request.headers.get('x-forwarded-for');
-
-  if (!forwardedFor) {
+  if (!candidate || candidate.length > 64) {
     return null;
   }
 
-  const firstIp = forwardedFor
-    .split(',')[0]
-    ?.trim()
-    .toLowerCase();
+  if (isIP(candidate) === 0) {
+    return null;
+  }
 
-  return firstIp || null;
+  return candidate.toLowerCase();
 }
+
+// ============================================================
+// 5. IDENTIFIER HASHING
+// ============================================================
+
+function hashIdentifier(identifier: string): string {
+  return createHash('sha256')
+    .update(identifier.trim().toLowerCase())
+    .digest('hex');
+}
+
+// ============================================================
+// 6. TIMEOUT PROTECTION
+// ============================================================
 
 async function withTimeout<T>(
   operation: Promise<T>,
@@ -155,13 +198,16 @@ async function withTimeout<T>(
   }
 }
 
+// ============================================================
+// 7. AVAILABILITY-FIRST FALLBACK
+// ============================================================
+
 function fallbackResult(
   policy: RateLimitPolicy,
   mode: RateLimitMode,
 ): RateLimitResult {
-  // Availability-first fallback:
-  // Redis errors never interrupt crisis-response execution.
   return {
+    // Redis unavailable: do not interrupt crisis response.
     allowed: true,
     wouldBlock: false,
     mode,
@@ -173,6 +219,10 @@ function fallbackResult(
   };
 }
 
+// ============================================================
+// 8. DISTRIBUTED RATE LIMIT CHECK
+// ============================================================
+
 export async function checkRateLimit(
   identifier: string,
   policy: RateLimitPolicy,
@@ -180,18 +230,19 @@ export async function checkRateLimit(
   const mode = getMode();
 
   try {
+    validatePolicy(policy);
+
     if (
       typeof identifier !== 'string' ||
-      !identifier.trim()
+      !identifier.trim() ||
+      identifier.trim().length > MAX_IDENTIFIER_LENGTH
     ) {
-      throw new Error('Rate-limit identifier is missing.');
+      throw new Error('Invalid rate-limit identifier.');
     }
 
     const limiter = getLimiter(policy);
 
-    const hashedIdentifier = hashIdentifier(
-      identifier.trim(),
-    );
+    const hashedIdentifier = hashIdentifier(identifier);
 
     const result = await withTimeout(
       limiter.limit(hashedIdentifier),
@@ -200,8 +251,17 @@ export async function checkRateLimit(
 
     const wouldBlock = !result.success;
 
+    const retryAfter = wouldBlock
+      ? Math.max(
+          1,
+          Math.ceil(
+            (result.reset - Date.now()) / 1000,
+          ),
+        )
+      : null;
+
     return {
-      // Observe mode records the decision but never blocks.
+      // Observe mode records decisions without blocking.
       // Enforce mode applies the Redis decision.
       allowed: mode === 'observe' || result.success,
       wouldBlock,
@@ -209,20 +269,21 @@ export async function checkRateLimit(
       limit: result.limit,
       remaining: result.remaining,
       reset: result.reset,
-      retryAfter: wouldBlock
-        ? Math.max(
-            1,
-            Math.ceil((result.reset - Date.now()) / 1000),
-          )
-        : null,
+      retryAfter,
       source: 'redis',
     };
   } catch (error) {
+    // Never log user input, identifiers, or Redis credentials.
     console.error(
       '[ChayRa RateLimit]: Distributed check unavailable.',
-      error instanceof Error
-        ? error.message
-        : 'Unknown error',
+      {
+        namespace: policy?.namespace ?? 'unknown',
+        mode,
+        reason:
+          error instanceof Error
+            ? error.message
+            : 'Unknown error',
+      },
     );
 
     return fallbackResult(policy, mode);

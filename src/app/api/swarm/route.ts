@@ -8,6 +8,11 @@ import { createUserContent } from '@google/genai';
 import { PredictiveMemoryBank } from '@/core/adk/memory';
 import { chayRaCrisisFleet } from '@/core/adk/runtime';
 
+import {
+  checkRateLimit,
+  getClientIp,
+} from '@/lib/security/rate-limit';
+
 import '@/core/agents/mindguard';
 import '@/core/agents/scavenger';
 import '@/core/agents/radar';
@@ -25,6 +30,12 @@ const DEFAULT_USER_ID = 'chayra-web-guest';
 const MAX_MESSAGE_LENGTH = 20_000;
 const MAX_REQUEST_BODY_BYTES = 96 * 1024; // 96 KB
 
+const SWARM_RATE_LIMIT_POLICY = {
+  namespace: 'swarm',
+  limit: 20,
+  window: '1 m',
+} as const;
+
 const VALID_THREAT_LEVELS = [
   'LOW',
   'MEDIUM',
@@ -39,7 +50,6 @@ type Coordinates = {
 
 type AgentResults = Record<string, any>;
 type JsonRecord = Record<string, any>;
-
 
 class RequestBodyTooLargeError extends Error {
   constructor() {
@@ -318,6 +328,59 @@ export async function POST(req: Request) {
   );
 
   try {
+    // 0. Distributed IP-based rate limiting.
+    // Missing trusted proxy IP: skip limiter to preserve
+    // local development and non-proxy deployment usability.
+    const clientIp = getClientIp(req);
+
+    if (!clientIp) {
+      console.warn(
+        '[ADK API]: Trusted client IP unavailable. Rate limit skipped.',
+        { requestId },
+      );
+    } else {
+      const rateLimit = await checkRateLimit(
+        clientIp,
+        SWARM_RATE_LIMIT_POLICY,
+      );
+
+      console.log(
+        '[ADK API]: Rate-limit decision.',
+        {
+          requestId,
+          mode: rateLimit.mode,
+          source: rateLimit.source,
+          wouldBlock: rateLimit.wouldBlock,
+          remaining: rateLimit.remaining,
+        },
+      );
+
+      if (!rateLimit.allowed) {
+        return NextResponse.json(
+          {
+            type: 'error',
+            message:
+              'Too many requests. Please wait before trying again.',
+            requestId,
+          },
+          {
+            status: 429,
+            headers: {
+              'Retry-After': String(
+                rateLimit.retryAfter ?? 60,
+              ),
+              'X-RateLimit-Limit': String(
+                rateLimit.limit,
+              ),
+              'X-RateLimit-Remaining': String(
+                rateLimit.remaining ?? 0,
+              ),
+              'Cache-Control': 'no-store',
+            },
+          },
+        );
+      }
+    }
 
     // 1. Parse and size-limit request body.
     let payload: JsonRecord;
@@ -355,7 +418,6 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-
 
     // 2. Validate user input.
     if (
