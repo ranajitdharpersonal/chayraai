@@ -23,6 +23,7 @@ export const dynamic = 'force-dynamic';
 const APP_NAME = 'chayra-enterprise-fleet';
 const DEFAULT_USER_ID = 'chayra-web-guest';
 const MAX_MESSAGE_LENGTH = 20_000;
+const MAX_REQUEST_BODY_BYTES = 96 * 1024; // 96 KB
 
 const VALID_THREAT_LEVELS = [
   'LOW',
@@ -38,6 +39,74 @@ type Coordinates = {
 
 type AgentResults = Record<string, any>;
 type JsonRecord = Record<string, any>;
+
+
+class RequestBodyTooLargeError extends Error {
+  constructor() {
+    super('Request body exceeds the allowed size.');
+    this.name = 'RequestBodyTooLargeError';
+  }
+}
+
+async function readJsonBody(req: Request): Promise<unknown> {
+  const contentLength = req.headers.get('content-length');
+
+  if (contentLength !== null) {
+    const declaredLength = Number(contentLength);
+
+    if (
+      !Number.isFinite(declaredLength) ||
+      declaredLength < 0
+    ) {
+      throw new Error('Invalid Content-Length header.');
+    }
+
+    if (declaredLength > MAX_REQUEST_BODY_BYTES) {
+      throw new RequestBodyTooLargeError();
+    }
+  }
+
+  if (!req.body) {
+    throw new Error('Request body is missing.');
+  }
+
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) break;
+
+      totalBytes += value.byteLength;
+
+      if (totalBytes > MAX_REQUEST_BODY_BYTES) {
+        await reader.cancel();
+        throw new RequestBodyTooLargeError();
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bodyBytes = new Uint8Array(totalBytes);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    bodyBytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  const bodyText = new TextDecoder('utf-8', {
+    fatal: true,
+  }).decode(bodyBytes);
+
+  return JSON.parse(bodyText);
+}
 
 function isRecord(value: unknown): value is JsonRecord {
   return Boolean(
@@ -249,11 +318,12 @@ export async function POST(req: Request) {
   );
 
   try {
-    // 1. Parse request body.
+
+    // 1. Parse and size-limit request body.
     let payload: JsonRecord;
 
     try {
-      const parsed = await req.json();
+      const parsed = await readJsonBody(req);
 
       if (!isRecord(parsed)) {
         return NextResponse.json(
@@ -266,7 +336,17 @@ export async function POST(req: Request) {
       }
 
       payload = parsed;
-    } catch {
+    } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        return NextResponse.json(
+          {
+            type: 'error',
+            message: 'Request body exceeds the allowed size.',
+          },
+          { status: 413 },
+        );
+      }
+
       return NextResponse.json(
         {
           type: 'error',
@@ -275,6 +355,7 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+
 
     // 2. Validate user input.
     if (
@@ -462,8 +543,8 @@ export async function POST(req: Request) {
 
     const medicalData = Array.isArray(rawMedicalData)
       ? rawMedicalData.filter(
-          (item: unknown) => typeof item === 'string',
-        )
+        (item: unknown) => typeof item === 'string',
+      )
       : getDefaultMedicalResult();
 
     // 13. Navigator result.
@@ -495,18 +576,18 @@ export async function POST(req: Request) {
     )
       ? navigationData.facilities
       : {
-          hospital: navigationData.hospital ?? null,
-          bunker: navigationData.bunker ?? null,
-        };
+        hospital: navigationData.hospital ?? null,
+        bunker: navigationData.bunker ?? null,
+      };
 
     const resolvedRoutes = isRecord(
       navigationData.routes,
     )
       ? navigationData.routes
       : {
-          hospital: null,
-          bunker: null,
-        };
+        hospital: null,
+        bunker: null,
+      };
 
     const hospitalFacility =
       resolvedFacilities.hospital ?? null;
