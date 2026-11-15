@@ -10,8 +10,7 @@ import {
 // ============================================================
 
 const CONFIG = {
-  region:
-    process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || 'us-east-1',
 
   modelId:
     process.env.AWS_BEDROCK_MODEL_ID?.trim() ||
@@ -27,6 +26,7 @@ const CONFIG = {
 
   temperature: 0.2,
   timeoutMs: 30_000,
+  maxSystemChars: 16_000,
 };
 
 let bedrockClient: BedrockRuntimeClient | null = null;
@@ -36,16 +36,14 @@ let bedrockClient: BedrockRuntimeClient | null = null;
 // ============================================================
 
 function getBedrockClient(): BedrockRuntimeClient {
-  if (bedrockClient) {
-    return bedrockClient;
-  }
+  if (bedrockClient) return bedrockClient;
 
   const accessKey = process.env.AWS_ACCESS_KEY_ID?.trim();
   const secretKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
 
   if (Boolean(accessKey) !== Boolean(secretKey)) {
     throw new Error(
-      '[Central Brain]: Both AWS access key and secret key must be configured together.',
+      'Bedrock credentials configuration is incomplete.',
     );
   }
 
@@ -74,28 +72,46 @@ function getBedrockClient(): BedrockRuntimeClient {
 
 // ============================================================
 // SINGLE INFERENCE ENTRY POINT
-// All agents must use this function.
+//
+// New usage:
+// generateText(untrustedUserContent, trustedSystemInstruction)
+//
+// Legacy usage remains supported:
+// generateText(existingPrompt)
 // ============================================================
 
 export async function generateText(
   prompt: string,
+  systemInstruction?: string,
 ): Promise<string> {
-  if (
-    typeof prompt !== 'string' ||
-    !prompt.trim()
-  ) {
-    throw new Error(
-      '[Central Brain]: Prompt cannot be empty.',
-    );
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    throw new Error('Inference input cannot be empty.');
   }
 
-  console.log(
-    `[Central Brain]: Sending inference to Amazon Bedrock (${CONFIG.modelId})...`,
-  );
+  if (
+    systemInstruction !== undefined &&
+    (
+      typeof systemInstruction !== 'string' ||
+      !systemInstruction.trim() ||
+      systemInstruction.length > CONFIG.maxSystemChars
+    )
+  ) {
+    throw new Error('Invalid system instruction.');
+  }
 
   try {
     const command = new ConverseCommand({
       modelId: CONFIG.modelId,
+
+      ...(systemInstruction
+        ? {
+            system: [
+              {
+                text: systemInstruction,
+              },
+            ],
+          }
+        : {}),
 
       messages: [
         {
@@ -117,14 +133,11 @@ export async function generateText(
     const response = await getBedrockClient().send(
       command,
       {
-        abortSignal: AbortSignal.timeout(
-          CONFIG.timeoutMs,
-        ),
+        abortSignal: AbortSignal.timeout(CONFIG.timeoutMs),
       },
     );
 
-    const content =
-      response.output?.message?.content ?? [];
+    const content = response.output?.message?.content ?? [];
 
     const text = content
       .map((block) => block.text || '')
@@ -132,27 +145,18 @@ export async function generateText(
       .trim();
 
     if (!text) {
-      throw new Error(
-        `Bedrock returned no text. Stop reason: ${response.stopReason || 'UNKNOWN'}`,
-      );
+      throw new Error('Bedrock returned an empty response.');
     }
-
-    console.log(
-      `[Central Brain]: Bedrock inference completed. Model=${CONFIG.modelId}`,
-    );
 
     return text;
   } catch (error) {
-    console.error(
-      '[Central Brain]: Bedrock inference failed.',
-      error,
-    );
+    // Do not expose provider error messages or request details.
+    console.error('[Central Brain]: Bedrock inference failed.', {
+      errorType:
+        error instanceof Error ? error.name : 'UnknownError',
+    });
 
-    throw new Error(
-      error instanceof Error
-        ? `Amazon Bedrock inference failed: ${error.message}`
-        : 'Amazon Bedrock inference failed.',
-    );
+    throw new Error('Amazon Bedrock inference failed.');
   }
 }
 
