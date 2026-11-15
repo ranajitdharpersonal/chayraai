@@ -540,11 +540,18 @@ async function runPublicHealth(data: { location?: string }): Promise<PublicHealt
     const resultToSave: PublicHealthResult = {
       healthAdvisory:
         typeof result?.advisoryText === 'string'
-          ? result.advisoryText
+          ? cleanText(
+            result.advisoryText,
+            'Public-health advisory unavailable.',
+            2000,
+          )
           : liveSourceAvailable
             ? `Found ${officialAlerts.length} verified public-health report(s) across WHO Disease Outbreak News and UN ReliefWeb in the last ${LOOKBACK_DAYS} days.`
-            : previousHealthState?.healthAdvisory ||
-            `No verified public-health event was confirmed by the currently reachable trusted sources in the last ${LOOKBACK_DAYS} days.`,
+            : cleanText(
+              previousHealthState?.healthAdvisory,
+              `No verified public-health event was confirmed by the currently reachable trusted sources in the last ${LOOKBACK_DAYS} days.`,
+              2000,
+            ),
       outbreakReports,
       officialAlerts,
       metadata: {
