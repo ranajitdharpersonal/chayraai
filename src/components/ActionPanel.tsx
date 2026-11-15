@@ -260,6 +260,8 @@ function normalizeEvidence(value: unknown): JsonRecord | null {
     ),
     hasConflictingInfo: value.hasConflictingInfo === true,
     isVerified: value.isVerified === true,
+    modelAssessmentSupportsClaim:
+      value.modelAssessmentSupportsClaim === true,
     lastCheckedTimestamp:
       value.lastCheckedTimestamp ?? null,
   };
@@ -473,7 +475,7 @@ export default function ActionPanel() {
             ? incomingSync.un
             : officialAlertsProvided || outbreakReportsProvided
               ? officialAlerts.length > 0 ||
-                outbreakReports.length > 0
+              outbreakReports.length > 0
               : prev.syncStatus.un;
 
         const nasaStatus =
@@ -502,21 +504,21 @@ export default function ActionPanel() {
           intel:
             incomingIntel !== undefined
               ? toDisplayText(
-                  incomingIntel,
-                  prev.intel
-                )
+                incomingIntel,
+                prev.intel
+              )
               : prev.intel,
 
           route:
             detail.route !== undefined ||
-            detail.navigationText !== undefined ||
-            detail.navigation !== undefined
+              detail.navigationText !== undefined ||
+              detail.navigation !== undefined
               ? toDisplayText(
-                  detail.route ??
-                    detail.navigationText ??
-                    detail.navigation,
-                  prev.route
-                )
+                detail.route ??
+                detail.navigationText ??
+                detail.navigation,
+                prev.route
+              )
               : prev.route,
 
           medical:
@@ -527,9 +529,9 @@ export default function ActionPanel() {
           vault:
             detail.vault !== undefined
               ? toDisplayText(
-                  detail.vault,
-                  prev.vault
-                )
+                detail.vault,
+                prev.vault
+              )
               : prev.vault,
 
           evidence:
@@ -540,9 +542,9 @@ export default function ActionPanel() {
           healthAdvisory:
             detail.healthAdvisory !== undefined
               ? toDisplayText(
-                  detail.healthAdvisory,
-                  prev.healthAdvisory
-                )
+                detail.healthAdvisory,
+                prev.healthAdvisory
+              )
               : prev.healthAdvisory,
 
           officialAlerts,
@@ -558,9 +560,9 @@ export default function ActionPanel() {
           resiliencePrediction:
             detail.resiliencePrediction !== undefined
               ? toDisplayText(
-                  detail.resiliencePrediction,
-                  prev.resiliencePrediction
-                )
+                detail.resiliencePrediction,
+                prev.resiliencePrediction
+              )
               : prev.resiliencePrediction,
 
           syncStatus: {
@@ -727,11 +729,10 @@ export default function ActionPanel() {
 
         <button
           onClick={() => handleTabChange('emergency')}
-          className={`relative z-10 flex-1 py-1.5 md:py-2.5 px-0.5 flex items-center justify-center gap-1 md:gap-2 rounded-[16px] md:rounded-2xl text-[7.5px] md:text-xs font-bold tracking-[0.05em] md:tracking-widest transition-all duration-500 ${
-            activeTab === 'emergency'
-              ? 'bg-red-500/15 text-red-400 border border-red-500/30 shadow-[inset_0_0_20px_rgba(220,38,38,0.15)]'
-              : 'text-gray-500 hover:text-gray-300'
-          }`}
+          className={`relative z-10 flex-1 py-1.5 md:py-2.5 px-0.5 flex items-center justify-center gap-1 md:gap-2 rounded-[16px] md:rounded-2xl text-[7.5px] md:text-xs font-bold tracking-[0.05em] md:tracking-widest transition-all duration-500 ${activeTab === 'emergency'
+            ? 'bg-red-500/15 text-red-400 border border-red-500/30 shadow-[inset_0_0_20px_rgba(220,38,38,0.15)]'
+            : 'text-gray-500 hover:text-gray-300'
+            }`}
         >
           <ShieldAlert className="w-3 h-3 md:w-3.5 md:h-3.5" />
           EMERGENCY
@@ -739,11 +740,10 @@ export default function ActionPanel() {
 
         <button
           onClick={() => handleTabChange('health')}
-          className={`relative z-10 flex-1 py-1.5 md:py-2.5 px-0.5 flex items-center justify-center gap-1 md:gap-2 rounded-[16px] md:rounded-2xl text-[7.5px] md:text-xs font-bold tracking-[0.05em] md:tracking-widest transition-all duration-500 ${
-            activeTab === 'health'
-              ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-[inset_0_0_20px_rgba(6,182,212,0.15)]'
-              : 'text-gray-500 hover:text-gray-300'
-          }`}
+          className={`relative z-10 flex-1 py-1.5 md:py-2.5 px-0.5 flex items-center justify-center gap-1 md:gap-2 rounded-[16px] md:rounded-2xl text-[7.5px] md:text-xs font-bold tracking-[0.05em] md:tracking-widest transition-all duration-500 ${activeTab === 'health'
+            ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-[inset_0_0_20px_rgba(6,182,212,0.15)]'
+            : 'text-gray-500 hover:text-gray-300'
+            }`}
         >
           <Biohazard className="w-3 h-3 md:w-3.5 md:h-3.5" />
           PUBLIC HEALTH
@@ -751,11 +751,10 @@ export default function ActionPanel() {
 
         <button
           onClick={() => handleTabChange('resilience')}
-          className={`relative z-10 flex-1 py-1.5 md:py-2.5 px-0.5 flex items-center justify-center gap-1 md:gap-2 rounded-[16px] md:rounded-2xl text-[7.5px] md:text-xs font-bold tracking-[0.05em] md:tracking-widest transition-all duration-500 ${
-            activeTab === 'resilience'
-              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.15)]'
-              : 'text-gray-500 hover:text-gray-300'
-          }`}
+          className={`relative z-10 flex-1 py-1.5 md:py-2.5 px-0.5 flex items-center justify-center gap-1 md:gap-2 rounded-[16px] md:rounded-2xl text-[7.5px] md:text-xs font-bold tracking-[0.05em] md:tracking-widest transition-all duration-500 ${activeTab === 'resilience'
+            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[inset_0_0_20px_rgba(16,185,129,0.15)]'
+            : 'text-gray-500 hover:text-gray-300'
+            }`}
         >
           <TrendingUp className="w-3 h-3 md:w-3.5 md:h-3.5" />
           RESILIENCE
@@ -859,11 +858,10 @@ export default function ActionPanel() {
                     </span>
 
                     <span
-                      className={`text-xs font-bold tracking-wide ${meter.text} ${
-                        panelData.threatLevel === 'CRITICAL'
-                          ? 'animate-pulse'
-                          : ''
-                      }`}
+                      className={`text-xs font-bold tracking-wide ${meter.text} ${panelData.threatLevel === 'CRITICAL'
+                        ? 'animate-pulse'
+                        : ''
+                        }`}
                     >
                       {panelData.threatLevel}
                     </span>
@@ -1136,13 +1134,13 @@ export default function ActionPanel() {
 
                   <span className="text-right">
                     {metadata.snapshotStatus === 'LAST_KNOWN_GOOD' &&
-                    snapshotAge
+                      snapshotAge
                       ? `FRESHNESS: ${snapshotAge}`
                       : toDisplayText(
-                          metadata.snapshotStatus ??
-                            metadata.sourceStatus,
-                          'STATUS UNKNOWN'
-                        )}
+                        metadata.snapshotStatus ??
+                        metadata.sourceStatus,
+                        'STATUS UNKNOWN'
+                      )}
                   </span>
                 </div>
               )}
@@ -1162,14 +1160,14 @@ export default function ActionPanel() {
                     .map((alert, index) => {
                       const title = toDisplayText(
                         alert.name ??
-                          alert.title ??
-                          alert.headline,
+                        alert.title ??
+                        alert.headline,
                         'Official report'
                       );
 
                       const url = getSafeHttpUrl(
                         alert.url ??
-                          alert.link
+                        alert.link
                       );
 
                       return (
@@ -1185,7 +1183,7 @@ export default function ActionPanel() {
                             <span className="text-[8px] text-cyan-500 font-mono whitespace-nowrap">
                               {formatDate(
                                 alert.date ??
-                                  alert.publishedAt
+                                alert.publishedAt
                               )}
                             </span>
                           </div>
@@ -1236,7 +1234,7 @@ export default function ActionPanel() {
                         <h4 className="text-[11px] font-bold text-cyan-300 uppercase tracking-wide">
                           {toDisplayText(
                             report.title ??
-                              report.name,
+                            report.name,
                             'Outbreak report'
                           )}
                         </h4>
@@ -1244,7 +1242,7 @@ export default function ActionPanel() {
                         <p className="text-[10.5px] text-cyan-100/80 leading-relaxed whitespace-pre-wrap">
                           {toDisplayText(
                             report.description ??
-                              report.summary,
+                            report.summary,
                             'No additional description supplied.'
                           )}
                         </p>
@@ -1377,42 +1375,39 @@ export default function ActionPanel() {
       <div className="mt-2 md:mt-3 bg-[#0a0714]/90 backdrop-blur-2xl border border-white/5 rounded-[18px] md:rounded-[22px] p-2 md:p-3 shadow-2xl relative overflow-hidden group hover:border-white/10 transition-colors shrink-0">
 
         <div
-          className={`absolute left-0 top-0 w-1.5 h-full transition-colors duration-500 ${
-            !panelData.evidence
-              ? 'bg-gray-600'
-              : panelData.evidence.isVerified
-                ? 'bg-emerald-500 shadow-[0_0_15px_#22c55e]'
-                : 'bg-red-500 shadow-[0_0_15px_#ef4444]'
-          }`}
+          className={`absolute left-0 top-0 w-1.5 h-full transition-colors duration-500 ${!panelData.evidence
+            ? 'bg-gray-600'
+            : panelData.evidence.isVerified
+              ? 'bg-emerald-500 shadow-[0_0_15px_#22c55e]'
+              : 'bg-amber-500 shadow-[0_0_15px_#f59e0b]'
+            }`}
         />
 
         <div className="flex justify-between items-center mb-2 pl-2 gap-2">
           <span className="text-[10.5px] font-bold text-gray-300 flex items-center gap-1.5 uppercase tracking-widest">
             <Database
-              className={`w-3.5 h-3.5 ${
-                panelData.evidence
-                  ? 'text-emerald-400'
-                  : 'text-gray-400'
-              }`}
+              className={`w-3.5 h-3.5 ${panelData.evidence
+                ? 'text-emerald-400'
+                : 'text-gray-400'
+                }`}
             />
 
             TRUTH VERIFIER
           </span>
 
           <span
-            className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${
-              !panelData.evidence
+            className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${!panelData.evidence
                 ? 'bg-gray-500/15 text-gray-400 border border-gray-500/30'
                 : panelData.evidence.isVerified
                   ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-red-500/15 text-red-400 border border-red-500/30'
-            }`}
+                  : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+              }`}
           >
             {!panelData.evidence
               ? 'STANDBY'
               : panelData.evidence.isVerified
                 ? 'SUPPORTED'
-                : 'NOT VERIFIED'}
+                : 'INCONCLUSIVE'}
           </span>
         </div>
 
