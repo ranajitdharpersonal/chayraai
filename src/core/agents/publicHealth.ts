@@ -423,85 +423,78 @@ async function runPublicHealth(data: { location?: string }): Promise<PublicHealt
     : 'No previous public-health memory available.';
 
   try {
-    const prompt = `
-You are the Public Health Intelligence Agent for the ChayRa Enterprise Crisis Fleet.
 
-Current timestamp:
-${analysisDate}
+    const userContent = JSON.stringify({
+      currentTimestamp: analysisDate,
+      analysisWindowDays: LOOKBACK_DAYS,
+      userLocation:
+        typeof data?.location === 'string'
+          ? data.location.slice(0, 200)
+          : 'Not provided',
+      officialSourceRecords: officialAlerts,
+      historicalSnapshot: historicalContext,
+    });
 
-Analysis window:
-LAST ${LOOKBACK_DAYS} DAYS
+    const rawText = await generateText(
+      userContent,
+      SYSTEM_INSTRUCTION,
+    );
 
-User location:
-${data.location || 'Not provided'}
-
-VERIFIED SOURCE RECORDS:
-${JSON.stringify(officialAlerts)}
-
-PREVIOUS HEALTH SNAPSHOT:
-${historicalContext}
-
-RULES:
-1. Only the supplied WHO or UN ReliefWeb records are official evidence.
-2. Never invent a disease, outbreak, date, source, case count, or confirmation.
-3. Historical memory may be shown only as LAST VERIFIED SNAPSHOT.
-4. Future spread is MODEL INFERENCE only.
-5. Use source countryIso3 when supplied; otherwise use a reliable ISO-3166 alpha-3 code or 0 coordinates.
-6. If there is no meaningful disease/outbreak signal, return an empty outbreakReports array.
-7. Keep official evidence separate from model inference.
-
-Return ONLY JSON:
-{
-  "advisoryText": "2-3 concise sentences",
-  "outbreakReports": [
-    {
-      "title": "string",
-      "description": "official evidence summary",
-      "spreadForecast": "MODEL INFERENCE: ...",
-      "source": "WHO Disease Outbreak News or UN ReliefWeb",
-      "date": "exact source date",
-      "activeZone": { "isoCode": "ISO-3166 alpha-3", "lat": 0, "lng": 0 },
-      "vulnerableZones": [
-        { "isoCode": "ISO-3166 alpha-3", "lat": 0, "lng": 0 }
-      ]
-    }
-  ]
-}
-`;
-
-    const rawText = await generateText(prompt);
-    const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const cleanJson = rawText
+      .replace(/```json/gi, '')
+      .replace(/```/g, '')
+      .trim();
 
     let result: any = {};
+
     try {
       result = JSON.parse(cleanJson);
     } catch {
-      console.warn('[Public Health]: Central Brain returned malformed JSON.');
+      console.warn(
+        '[Public Health]: Central Brain returned malformed JSON.',
+      );
     }
 
+
+
     const outbreakReports: OutbreakReport[] =
-      (Array.isArray(result?.outbreakReports) ? result.outbreakReports : [])
+      (Array.isArray(result?.outbreakReports)
+        ? result.outbreakReports
+        : [])
         .filter(
           (report: any) =>
             report &&
             typeof report.title === 'string' &&
+            report.title.trim().length > 0 &&
             isValidZone(report.activeZone),
         )
         .map((report: any) => ({
-          title: report.title,
-          description: cleanText(report.description, 'No detailed description available.'),
+          title: cleanText(report.title, 'Unknown outbreak', 200),
+          description: cleanText(
+            report.description,
+            'No detailed description available.',
+            1500,
+          ),
           spreadForecast: cleanText(
             report.spreadForecast,
             'MODEL INFERENCE: Insufficient evidence for a reliable forecast.',
+            1500,
           ),
-          source: cleanText(report.source, 'Trusted official source'),
+          source: cleanText(
+            report.source,
+            'Trusted official source',
+            200,
+          ),
           date: normalizeDate(report.date),
           verificationStatus: 'MODEL_INFERENCE' as const,
           activeZone: report.activeZone,
           vulnerableZones: Array.isArray(report.vulnerableZones)
-            ? report.vulnerableZones.filter(isValidZone)
+            ? report.vulnerableZones
+              .filter(isValidZone)
+              .slice(0, 30)
             : [],
         }));
+
 
     const liveSourceAvailable = officialAlerts.length > 0;
     const resultToSave: PublicHealthResult = {
