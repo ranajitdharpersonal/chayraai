@@ -130,13 +130,42 @@ function isRecord(value: unknown): value is JsonRecord {
   );
 }
 
-function isValidUUID(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      value,
-    )
-  );
+function isTrustedRequestOrigin(req: Request): boolean {
+  const origin = req.headers.get('origin');
+
+  // Browser POST requests should provide an Origin header.
+  if (!origin) {
+    return false;
+  }
+
+  try {
+    const parsedOrigin = new URL(origin);
+    const requestOrigin = new URL(req.url).origin;
+
+    // Reject malformed or non-canonical Origin values.
+    if (parsedOrigin.origin !== origin) {
+      return false;
+    }
+
+    // Only allow requests from this exact origin.
+    if (parsedOrigin.origin !== requestOrigin) {
+      return false;
+    }
+
+    // Additional browser-level cross-site protection.
+    const fetchSite = req.headers.get('sec-fetch-site');
+
+    if (
+      fetchSite !== null &&
+      fetchSite !== 'same-origin'
+    ) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function validateCoordinates(
@@ -324,9 +353,29 @@ export async function POST(req: Request) {
   );
 
   try {
-    // 0. Distributed IP-based rate limiting.
-    // Missing trusted proxy IP: skip limiter to preserve
-    // local development and non-proxy deployment usability.
+    // 0. Validate request origin to prevent cross-site POSTs.
+    if (!isTrustedRequestOrigin(req)) {
+      console.warn(
+        '[ADK API]: Request rejected due to invalid origin.',
+        { requestId },
+      );
+
+      return NextResponse.json(
+        {
+          type: 'error',
+          message: 'Request origin is not authorized.',
+          requestId,
+        },
+        {
+          status: 403,
+          headers: {
+            'Cache-Control': 'no-store',
+          },
+        },
+      );
+    }
+
+    // 1. Distributed IP-based rate limiting.
     const clientIp = getClientIp(req);
 
     if (!clientIp) {
@@ -867,7 +916,7 @@ export async function POST(req: Request) {
     }
 
     return response;
-    
+
   } catch (error) {
     console.error(
       '[ADK Swarm Orchestrator]: Critical execution failure.',
