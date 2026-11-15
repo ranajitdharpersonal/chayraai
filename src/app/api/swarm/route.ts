@@ -13,6 +13,10 @@ import {
   getClientIp,
 } from '@/lib/security/rate-limit';
 
+import {
+  resolveServerSession,
+} from '@/lib/security/session';
+
 import '@/core/agents/mindguard';
 import '@/core/agents/scavenger';
 import '@/core/agents/radar';
@@ -133,14 +137,6 @@ function isValidUUID(value: unknown): value is string {
       value,
     )
   );
-}
-
-function resolveSessionId(value: unknown): string {
-  if (isValidUUID(value)) {
-    return value.toLowerCase();
-  }
-
-  return randomUUID();
 }
 
 function validateCoordinates(
@@ -463,10 +459,27 @@ export async function POST(req: Request) {
 
     const userCoords = coordinateResult.coordinates;
 
-    // 4. Resolve unique session.
-    const activeSessionId =
-      resolveSessionId(payload.sessionId);
+    // 4. Resolve server-owned, signed session.
+    const serverSession = resolveServerSession(req);
 
+    if (!serverSession.ok) {
+      return NextResponse.json(
+        {
+          type: 'error',
+          message:
+            'Session security is not configured. Please contact the administrator.',
+          requestId,
+        },
+        {
+          status: 503,
+          headers: {
+            'Cache-Control': 'no-store',
+          },
+        },
+      );
+    }
+
+    const activeSessionId = serverSession.sessionId;
     const userId = DEFAULT_USER_ID;
 
     console.log(
@@ -799,8 +812,7 @@ export async function POST(req: Request) {
       },
     );
 
-    // 20. Final response.
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         type: 'success',
         requestId,
@@ -813,8 +825,7 @@ export async function POST(req: Request) {
         // Medical
         medical: medicalData,
 
-        // Navigation: preserve legacy payload and expose
-        // facilities/routes as first-class response fields.
+        // Navigation
         navigation: navigationData,
         navigationText: resolvedNavigationText,
         destCoords: resolvedDestCoords,
@@ -847,6 +858,16 @@ export async function POST(req: Request) {
         },
       },
     );
+
+    if (serverSession.setCookie) {
+      response.headers.set(
+        'Set-Cookie',
+        serverSession.setCookie,
+      );
+    }
+
+    return response;
+    
   } catch (error) {
     console.error(
       '[ADK Swarm Orchestrator]: Critical execution failure.',
