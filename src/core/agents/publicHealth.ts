@@ -125,6 +125,39 @@ function cleanText(
     : fallback;
 }
 
+
+function safeSourceUrl(
+  value: unknown,
+  allowedHosts: string[],
+  fallback: string,
+): string {
+  if (typeof value !== 'string') return fallback;
+
+  try {
+    const url = new URL(value);
+
+    const isAllowedHost = allowedHosts.some(
+      host =>
+        url.hostname === host ||
+        url.hostname.endsWith(`.${host}`),
+    );
+
+    if (
+      url.protocol !== 'https:' ||
+      !isAllowedHost ||
+      url.username ||
+      url.password
+    ) {
+      return fallback;
+    }
+
+    return url.toString();
+  } catch {
+    return fallback;
+  }
+}
+
+
 function isValidZone(zone: any): zone is Zone {
   return Boolean(
     zone &&
@@ -238,7 +271,11 @@ async function fetchReliefWebAlerts(fromDate: Date, now: Date): Promise<Official
         return {
           id: String(item?.id ?? `${fields?.title ?? 'report'}-${date}`),
           name: cleanText(fields?.title, 'Public health report'),
-          url: String(fields?.url ?? item?.href ?? 'https://reliefweb.int/'),
+          url: safeSourceUrl(
+            fields?.url ?? item?.href,
+            ['reliefweb.int'],
+            'https://reliefweb.int/',
+          ),
           source: cleanText(fields?.source?.name ?? fields?.source?.shortname, 'UN ReliefWeb'),
           date,
           verified: true as const,
@@ -278,9 +315,12 @@ async function fetchWHOAlerts(fromDate: Date, now: Date): Promise<OfficialAlert[
       .map((item: any) => ({
         id: String(item?.Id ?? item?.DonId ?? item?.UrlName ?? `WHO-${item?.PublicationDate}`),
         name: cleanText(item?.Title, 'WHO Disease Outbreak News'),
-        url: item?.UrlName
-          ? `https://www.who.int/emergencies/disease-outbreak-news/item/${item.UrlName}`
-          : 'https://www.who.int/emergencies/disease-outbreak-news',
+
+        url:
+          typeof item?.UrlName === 'string' &&
+            item.UrlName.trim()
+            ? `https://www.who.int/emergencies/disease-outbreak-news/item/${encodeURIComponent(item.UrlName.trim())}`
+            : 'https://www.who.int/emergencies/disease-outbreak-news',
         source: 'WHO Disease Outbreak News',
         date: normalizeDate(item?.PublicationDate),
         verified: true as const,
