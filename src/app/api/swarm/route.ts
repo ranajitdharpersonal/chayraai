@@ -532,7 +532,7 @@ export async function POST(req: Request) {
     const userId = DEFAULT_USER_ID;
 
     console.log(
-      `[ADK API]: Session initialized. Session=${activeSessionId}`,
+      '[ADK API]: Server-owned session initialized.',
     );
 
     // 5. Initialize ADK runner.
@@ -624,7 +624,7 @@ export async function POST(req: Request) {
         '[ADK API]: MindGuard rejected the request.',
       );
 
-      return NextResponse.json(
+      const spamResponse = NextResponse.json(
         {
           type: 'spam',
           message:
@@ -638,6 +638,15 @@ export async function POST(req: Request) {
           },
         },
       );
+
+      if (serverSession.setCookie) {
+        spamResponse.headers.set(
+          'Set-Cookie',
+          serverSession.setCookie,
+        );
+      }
+
+      return spamResponse;
     }
 
     // 10. Scavenger result.
