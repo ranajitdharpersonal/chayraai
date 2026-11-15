@@ -347,6 +347,7 @@ function getDefaultEvidence() {
 
 export async function POST(req: Request) {
   const requestId = randomUUID();
+  let sessionCookie: string | undefined;
 
   console.log(
     `[ADK API]: Incoming swarm request [${requestId}].`,
@@ -529,6 +530,7 @@ export async function POST(req: Request) {
     }
 
     const activeSessionId = serverSession.sessionId;
+    sessionCookie = serverSession.setCookie;
     const userId = DEFAULT_USER_ID;
 
     console.log(
@@ -926,16 +928,17 @@ export async function POST(req: Request) {
 
     return response;
 
-  } catch (error) {
+    } catch (error) {
     console.error(
       '[ADK Swarm Orchestrator]: Critical execution failure.',
       {
-        error,
+        errorType:
+          error instanceof Error ? error.name : 'UnknownError',
         requestId,
       },
     );
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         type: 'error',
         requestId,
@@ -949,5 +952,11 @@ export async function POST(req: Request) {
         },
       },
     );
+
+    if (sessionCookie) {
+      response.headers.set('Set-Cookie', sessionCookie);
+    }
+
+    return response;
   }
 }
