@@ -31,6 +31,41 @@ export interface RadarSnapshot {
 }
 
 // ============================================================
+// STORED THREAT VALIDATION
+// ============================================================
+
+function isValidRadarThreat(
+  value: unknown,
+): value is RadarThreat {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value)
+  ) {
+    return false;
+  }
+
+  const threat = value as Record<string, unknown>;
+
+  return (
+    typeof threat.id === 'string' &&
+    threat.id.trim().length > 0 &&
+    typeof threat.name === 'string' &&
+    threat.name.trim().length > 0 &&
+    typeof threat.type === 'string' &&
+    threat.type.trim().length > 0 &&
+    typeof threat.lat === 'number' &&
+    Number.isFinite(threat.lat) &&
+    threat.lat >= -90 &&
+    threat.lat <= 90 &&
+    typeof threat.lng === 'number' &&
+    Number.isFinite(threat.lng) &&
+    threat.lng >= -180 &&
+    threat.lng <= 180
+  );
+}
+
+// ============================================================
 // SAVE DAILY RADAR SNAPSHOT
 // ============================================================
 
@@ -98,7 +133,8 @@ export async function getRadarSnapshot(): Promise<RadarSnapshot | null> {
 
   if (
     !Array.isArray(item.threats) ||
-    typeof item.scannedAt !== 'string'
+    typeof item.scannedAt !== 'string' ||
+    !Number.isFinite(new Date(item.scannedAt).getTime())
   ) {
     console.error(
       '[Radar Snapshot]: Stored snapshot has an invalid structure.',
@@ -107,9 +143,26 @@ export async function getRadarSnapshot(): Promise<RadarSnapshot | null> {
     return null;
   }
 
+  // Preserve valid threats while excluding malformed entries.
+  const validThreats = item.threats.filter(
+    isValidRadarThreat,
+  );
+
+  const rejectedCount =
+    item.threats.length - validThreats.length;
+
+  if (rejectedCount > 0) {
+    console.warn(
+      `[Radar Snapshot]: Excluded ${rejectedCount} invalid threat record(s).`,
+    );
+  }
+
   return {
-    threats: item.threats as RadarThreat[],
+    threats: validThreats,
     scannedAt: item.scannedAt,
-    systemVersion: item.systemVersion || '3.0.0',
+    systemVersion:
+      typeof item.systemVersion === 'string'
+        ? item.systemVersion
+        : '3.0.0',
   };
 }

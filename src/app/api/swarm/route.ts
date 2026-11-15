@@ -8,6 +8,15 @@ import { createUserContent } from '@google/genai';
 import { PredictiveMemoryBank } from '@/core/adk/memory';
 import { chayRaCrisisFleet } from '@/core/adk/runtime';
 
+import {
+  checkRateLimit,
+  getClientIp,
+} from '@/lib/security/rate-limit';
+
+import {
+  resolveServerSession,
+} from '@/lib/security/session';
+
 import '@/core/agents/mindguard';
 import '@/core/agents/scavenger';
 import '@/core/agents/radar';
@@ -25,6 +34,12 @@ const DEFAULT_USER_ID = 'chayra-web-guest';
 const MAX_MESSAGE_LENGTH = 20_000;
 const MAX_REQUEST_BODY_BYTES = 96 * 1024; // 96 KB
 
+const SWARM_RATE_LIMIT_POLICY = {
+  namespace: 'swarm',
+  limit: 20,
+  window: '1 m',
+} as const;
+
 const VALID_THREAT_LEVELS = [
   'LOW',
   'MEDIUM',
@@ -39,7 +54,6 @@ type Coordinates = {
 
 type AgentResults = Record<string, any>;
 type JsonRecord = Record<string, any>;
-
 
 class RequestBodyTooLargeError extends Error {
   constructor() {
@@ -116,21 +130,42 @@ function isRecord(value: unknown): value is JsonRecord {
   );
 }
 
-function isValidUUID(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      value,
-    )
-  );
-}
+function isTrustedRequestOrigin(req: Request): boolean {
+  const origin = req.headers.get('origin');
 
-function resolveSessionId(value: unknown): string {
-  if (isValidUUID(value)) {
-    return value.toLowerCase();
+  // Browser POST requests should provide an Origin header.
+  if (!origin) {
+    return false;
   }
 
-  return randomUUID();
+  try {
+    const parsedOrigin = new URL(origin);
+    const requestOrigin = new URL(req.url).origin;
+
+    // Reject malformed or non-canonical Origin values.
+    if (parsedOrigin.origin !== origin) {
+      return false;
+    }
+
+    // Only allow requests from this exact origin.
+    if (parsedOrigin.origin !== requestOrigin) {
+      return false;
+    }
+
+    // Additional browser-level cross-site protection.
+    const fetchSite = req.headers.get('sec-fetch-site');
+
+    if (
+      fetchSite !== null &&
+      fetchSite !== 'same-origin'
+    ) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function validateCoordinates(
@@ -312,12 +347,86 @@ function getDefaultEvidence() {
 
 export async function POST(req: Request) {
   const requestId = randomUUID();
+  let sessionCookie: string | undefined;
 
   console.log(
     `[ADK API]: Incoming swarm request [${requestId}].`,
   );
 
   try {
+    // 0. Validate request origin to prevent cross-site POSTs.
+    if (!isTrustedRequestOrigin(req)) {
+      console.warn(
+        '[ADK API]: Request rejected due to invalid origin.',
+        { requestId },
+      );
+
+      return NextResponse.json(
+        {
+          type: 'error',
+          message: 'Request origin is not authorized.',
+          requestId,
+        },
+        {
+          status: 403,
+          headers: {
+            'Cache-Control': 'no-store',
+          },
+        },
+      );
+    }
+
+    // 1. Distributed IP-based rate limiting.
+    const clientIp = getClientIp(req);
+
+    if (!clientIp) {
+      console.warn(
+        '[ADK API]: Trusted client IP unavailable. Rate limit skipped.',
+        { requestId },
+      );
+    } else {
+      const rateLimit = await checkRateLimit(
+        clientIp,
+        SWARM_RATE_LIMIT_POLICY,
+      );
+
+      console.log(
+        '[ADK API]: Rate-limit decision.',
+        {
+          requestId,
+          mode: rateLimit.mode,
+          source: rateLimit.source,
+          wouldBlock: rateLimit.wouldBlock,
+          remaining: rateLimit.remaining,
+        },
+      );
+
+      if (!rateLimit.allowed) {
+        return NextResponse.json(
+          {
+            type: 'error',
+            message:
+              'Too many requests. Please wait before trying again.',
+            requestId,
+          },
+          {
+            status: 429,
+            headers: {
+              'Retry-After': String(
+                rateLimit.retryAfter ?? 60,
+              ),
+              'X-RateLimit-Limit': String(
+                rateLimit.limit,
+              ),
+              'X-RateLimit-Remaining': String(
+                rateLimit.remaining ?? 0,
+              ),
+              'Cache-Control': 'no-store',
+            },
+          },
+        );
+      }
+    }
 
     // 1. Parse and size-limit request body.
     let payload: JsonRecord;
@@ -355,7 +464,6 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-
 
     // 2. Validate user input.
     if (
@@ -401,14 +509,32 @@ export async function POST(req: Request) {
 
     const userCoords = coordinateResult.coordinates;
 
-    // 4. Resolve unique session.
-    const activeSessionId =
-      resolveSessionId(payload.sessionId);
+    // 4. Resolve server-owned, signed session.
+    const serverSession = resolveServerSession(req);
 
+    if (!serverSession.ok) {
+      return NextResponse.json(
+        {
+          type: 'error',
+          message:
+            'Session security is not configured. Please contact the administrator.',
+          requestId,
+        },
+        {
+          status: 503,
+          headers: {
+            'Cache-Control': 'no-store',
+          },
+        },
+      );
+    }
+
+    const activeSessionId = serverSession.sessionId;
+    sessionCookie = serverSession.setCookie;
     const userId = DEFAULT_USER_ID;
 
     console.log(
-      `[ADK API]: Session initialized. Session=${activeSessionId}`,
+      '[ADK API]: Server-owned session initialized.',
     );
 
     // 5. Initialize ADK runner.
@@ -500,7 +626,7 @@ export async function POST(req: Request) {
         '[ADK API]: MindGuard rejected the request.',
       );
 
-      return NextResponse.json(
+      const spamResponse = NextResponse.json(
         {
           type: 'spam',
           message:
@@ -514,6 +640,15 @@ export async function POST(req: Request) {
           },
         },
       );
+
+      if (serverSession.setCookie) {
+        spamResponse.headers.set(
+          'Set-Cookie',
+          serverSession.setCookie,
+        );
+      }
+
+      return spamResponse;
     }
 
     // 10. Scavenger result.
@@ -737,8 +872,7 @@ export async function POST(req: Request) {
       },
     );
 
-    // 20. Final response.
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         type: 'success',
         requestId,
@@ -751,8 +885,7 @@ export async function POST(req: Request) {
         // Medical
         medical: medicalData,
 
-        // Navigation: preserve legacy payload and expose
-        // facilities/routes as first-class response fields.
+        // Navigation
         navigation: navigationData,
         navigationText: resolvedNavigationText,
         destCoords: resolvedDestCoords,
@@ -785,16 +918,27 @@ export async function POST(req: Request) {
         },
       },
     );
-  } catch (error) {
+
+    if (serverSession.setCookie) {
+      response.headers.set(
+        'Set-Cookie',
+        serverSession.setCookie,
+      );
+    }
+
+    return response;
+
+    } catch (error) {
     console.error(
       '[ADK Swarm Orchestrator]: Critical execution failure.',
       {
-        error,
+        errorType:
+          error instanceof Error ? error.name : 'UnknownError',
         requestId,
       },
     );
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         type: 'error',
         requestId,
@@ -808,5 +952,11 @@ export async function POST(req: Request) {
         },
       },
     );
+
+    if (sessionCookie) {
+      response.headers.set('Set-Cookie', sessionCookie);
+    }
+
+    return response;
   }
 }

@@ -27,16 +27,17 @@ const SESSION_TTL_SECONDS =
 function getSessionKey(sessionId: string) {
   if (
     typeof sessionId !== 'string' ||
-    !sessionId.trim() ||
-    sessionId.length > 128
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      sessionId,
+    )
   ) {
     throw new Error(
-      '[Memory Bank]: A valid session ID is required.',
+      '[Memory Bank]: A valid UUID session ID is required.',
     );
   }
 
   return {
-    pk: `SESSION#${sessionId.trim()}`,
+    pk: `SESSION#${sessionId.toLowerCase()}`,
     sk: SESSION_SORT_KEY,
   };
 }
@@ -50,10 +51,10 @@ export interface PublicHealthMemoryState {
   source?: string;
 
   sourceStatus?:
-    | 'AVAILABLE'
-    | 'NO_CURRENT_RECORDS'
-    | 'PARTIAL'
-    | 'UNAVAILABLE';
+  | 'AVAILABLE'
+  | 'NO_CURRENT_RECORDS'
+  | 'PARTIAL'
+  | 'UNAVAILABLE';
 
   healthAdvisory?: string;
 
@@ -71,15 +72,15 @@ export interface PublicHealthMemoryState {
     source?: string;
 
     sourceStatus?:
-      | 'AVAILABLE'
-      | 'NO_CURRENT_RECORDS'
-      | 'PARTIAL'
-      | 'UNAVAILABLE';
+    | 'AVAILABLE'
+    | 'NO_CURRENT_RECORDS'
+    | 'PARTIAL'
+    | 'UNAVAILABLE';
 
     snapshotStatus?:
-      | 'LIVE'
-      | 'LAST_KNOWN_GOOD'
-      | 'NO_DATA';
+    | 'LIVE'
+    | 'LAST_KNOWN_GOOD'
+    | 'NO_DATA';
 
     snapshotAgeDays?: number | null;
     verificationPolicy?: string;
@@ -104,7 +105,7 @@ export class PredictiveMemoryBank {
   ): Promise<void> {
 
     console.log(
-      `[Memory Bank]: Saving session ${sessionId} to DynamoDB...`,
+      '[Memory Bank]: Saving session state to DynamoDB...',
     );
 
     try {
@@ -214,7 +215,7 @@ export class PredictiveMemoryBank {
   ): Promise<Record<string, any> | null> {
 
     console.log(
-      `[Memory Bank]: Retrieving history for ${sessionId}...`,
+      '[Memory Bank]: Retrieving session history...',
     );
 
     try {
@@ -242,7 +243,7 @@ export class PredictiveMemoryBank {
       if (
         typeof item.expiresAt === 'number' &&
         item.expiresAt <=
-          Math.floor(Date.now() / 1000)
+        Math.floor(Date.now() / 1000)
       ) {
         console.log(
           '[Memory Bank]: Session history has expired.',
