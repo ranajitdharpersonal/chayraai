@@ -102,11 +102,18 @@ Schema:
 }
 `;
 
-function normalizeDate(value: unknown): string {
-  if (typeof value === 'string' && !Number.isNaN(new Date(value).getTime())) {
-    return new Date(value).toISOString();
+function normalizeDate(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) {
+    return null;
   }
-  return new Date().toISOString();
+
+  const timestamp = new Date(value).getTime();
+
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  return new Date(timestamp).toISOString();
 }
 function toReliefWebDate(date: Date): string {
   return date
@@ -235,6 +242,7 @@ async function fetchReliefWebAlerts(fromDate: Date, now: Date): Promise<Official
         const fields = item?.fields ?? {};
         const primaryCountry = fields?.primary_country;
         const date = normalizeDate(fields?.date?.created);
+        if (!date) return null;
         return {
           id: String(item?.id ?? `${fields?.title ?? 'report'}-${date}`),
           name: cleanText(fields?.title, 'Public health report'),
@@ -247,7 +255,11 @@ async function fetchReliefWebAlerts(fromDate: Date, now: Date): Promise<Official
           countryIso3: cleanText(primaryCountry?.iso3).toUpperCase() || undefined,
         } satisfies OfficialAlert;
       })
-      .filter((alert: OfficialAlert) => withinWindow(alert.date, fromDate, now));
+      .filter(
+        (alert: OfficialAlert | null): alert is OfficialAlert =>
+          alert !== null &&
+          withinWindow(alert.date, fromDate, now),
+      );
   } finally {
     clearTimeout(timeout);
   }
