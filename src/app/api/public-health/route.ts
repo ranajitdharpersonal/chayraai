@@ -66,7 +66,7 @@ async function acquireRefreshLock(): Promise<{
 
     return {
       acquired: true,
-      release: async () => {},
+      release: async () => { },
     };
   }
 
@@ -85,7 +85,7 @@ async function acquireRefreshLock(): Promise<{
     if (result !== 'OK') {
       return {
         acquired: false,
-        release: async () => {},
+        release: async () => { },
       };
     }
 
@@ -114,7 +114,7 @@ async function acquireRefreshLock(): Promise<{
 
     return {
       acquired: true,
-      release: async () => {},
+      release: async () => { },
     };
   }
 }
@@ -185,12 +185,14 @@ function getRefreshingResponse(
 ) {
   if (cached) {
     return NextResponse.json(
+
       {
+        ...cached,
         type: 'success',
         source: 'last-known-good',
         refreshStatus: 'refreshing',
-        ...cached,
       },
+
       {
         headers: {
           'Cache-Control': 'no-store',
@@ -315,12 +317,14 @@ export async function GET(request: Request) {
     // 3. Fresh snapshot: return immediately.
     if (cached && isFresh) {
       return NextResponse.json(
+
         {
+          ...cached,
           type: 'success',
           source: 'cache',
           refreshStatus: 'fresh',
-          ...cached,
         },
+
         {
           headers: {
             'Cache-Control': 'no-store',
@@ -350,12 +354,14 @@ export async function GET(request: Request) {
 
       if (cached) {
         return NextResponse.json(
+
           {
+            ...cached,
             type: 'success',
             source: 'last-known-good',
             refreshStatus: 'refresh-pending',
-            ...cached,
           },
+
           {
             headers: {
               'Cache-Control': 'no-store',
